@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "open3"
 require_relative "client"
 
 module Magi
@@ -498,21 +499,42 @@ module Magi
             end
           end
 
-          # Proceed with creation
-          card = create_card(name, content: content, type: type, **metadata)
+          # Use batch operations with transactional mode for atomic creation
+          # This ensures both card and tags are created together or not at all
+          operations = []
 
-          # Add tags as a child card if tags provided
+          # Main card creation
+          operations << {
+            action: "create",
+            name: name,
+            content: content,
+            type: type
+          }.merge(metadata).compact
+
+          # Add tags card if tags provided
           if tags.any?
-            begin
-              tags_content = tags.map { |tag| "[[#{tag}]]" }.join("\n")
-              create_card("#{name}+tags", content: tags_content, type: "Pointer")
-            rescue Client::APIError => e
-              # Tag creation failed but main card succeeded
-              warn "Card created but tags failed: #{e.message}"
-            end
+            tags_content = tags.map { |tag| "[[#{tag}]]" }.join("\n")
+            operations << {
+              action: "create",
+              name: "#{name}+tags",
+              content: tags_content,
+              type: "Pointer"
+            }
           end
 
-          card
+          # Execute as atomic transaction
+          result = batch_operations(operations, mode: "transactional")
+
+          # Return the main card from batch results
+          main_card_result = result["results"]&.first
+          return main_card_result["card"] if main_card_result&.dig("status") == "success"
+
+          # If batch failed, return error details
+          {
+            "status" => "error",
+            "message" => result["message"] || "Failed to create card with tags",
+            "errors" => result["results"]&.map { |r| r["error"] }&.compact || []
+          }
         end
 
         # Get structure recommendations for a card
@@ -931,7 +953,18 @@ module Magi
 
         all_cards = []
         offset = 0
+        loop_count = 0
+        max_loops = 100 # Safety limit to prevent infinite loops
+
         loop do
+          # Safety check: prevent infinite loop if server has pagination bug
+          loop_count += 1
+          if loop_count > max_loops
+            warn "Pagination safety limit reached (#{max_loops} pages). " \
+                 "Possible server pagination bug. Returning #{all_cards.size} cards so far."
+            break
+          end
+
           result = search_cards(
             updated_since: since_time.iso8601,
             updated_before: before_time.iso8601,
@@ -1153,25 +1186,35 @@ module Magi
 
       # Get git commits for a repository since a date
       def get_git_commits(repo_path, since:)
-        Dir.chdir(repo_path) do
-          # Get commits with format: hash|author|date|subject
-          output = `git log --since="#{since}" --pretty=format:"%h|%an|%ad|%s" --date=short 2>&1`
+        # Use Open3.capture3 for safer command execution with timeout
+        stdout, stderr, status = Open3.capture3(
+          "git", "log",
+          "--since=#{since}",
+          "--pretty=format:%h|%an|%ad|%s",
+          "--date=short",
+          chdir: repo_path,
+          timeout: 30 # Prevent hanging on huge repos
+        )
 
-          # Check if command succeeded
-          return [] unless $?.success?
+        # Return empty if command failed
+        return [] unless status.success?
 
-          output.split("\n").map do |line|
-            hash, author, date, subject = line.split("|", 4)
-            {
-              "hash" => hash,
-              "author" => author,
-              "date" => date,
-              "subject" => subject
-            }
-          end
+        # Parse output into structured commits
+        stdout.split("\n").map do |line|
+          hash, author, date, subject = line.split("|", 4)
+          {
+            "hash" => hash,
+            "author" => author,
+            "date" => date,
+            "subject" => subject
+          }
         end
+      rescue Timeout::Error
+        warn "Git log timed out for #{repo_path}. Skipping this repo."
+        []
       rescue StandardError => e
         # If we can't read the repo, return empty
+        warn "Failed to read git commits from #{repo_path}: #{e.message}"
         []
       end
 

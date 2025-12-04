@@ -300,18 +300,24 @@ RSpec.describe Magi::Archive::Mcp::Tools, "new features" do
 
   describe "#create_card_with_validation" do
     let(:validation_url) { "https://test.example.com/api/mcp/validation/tags" }
-    let(:create_url) { "https://test.example.com/api/mcp/cards" }
+    let(:batch_url) { "https://test.example.com/api/mcp/cards/batch" }
 
     context "when validation passes" do
       before do
         stub_request(:post, validation_url)
           .to_return(status: 200, body: { "valid" => true, "warnings" => [] }.to_json)
 
-        stub_request(:post, create_url)
-          .to_return(status: 201, body: { "name" => "Test Card", "id" => 123 }.to_json)
+        # Batch operation returns multi-status with results for each operation
+        stub_request(:post, batch_url)
+          .to_return(status: 207, body: {
+            "results" => [
+              { "status" => "success", "card" => { "name" => "Test Card", "id" => 123 } },
+              { "status" => "success", "card" => { "name" => "Test Card+tags", "id" => 124 } }
+            ]
+          }.to_json)
       end
 
-      it "validates then creates the card" do
+      it "validates then creates the card and tags atomically" do
         result = tools.create_card_with_validation(
           "Test Card",
           type: "Species",
@@ -320,8 +326,17 @@ RSpec.describe Magi::Archive::Mcp::Tools, "new features" do
         )
 
         expect(result).to have_key("name")
+        expect(result["name"]).to eq("Test Card")
         expect(WebMock).to have_requested(:post, validation_url)
-        expect(WebMock).to have_requested(:post, create_url)
+        expect(WebMock).to have_requested(:post, batch_url).with { |req|
+          body = JSON.parse(req.body)
+          # Verify it's using transactional mode
+          body["mode"] == "transactional" &&
+            # Verify both card and tags operations are included
+            body["operations"].size == 2 &&
+            body["operations"][0]["action"] == "create" &&
+            body["operations"][1]["name"].end_with?("+tags")
+        }
       end
     end
 
@@ -345,7 +360,37 @@ RSpec.describe Magi::Archive::Mcp::Tools, "new features" do
 
         expect(result["status"]).to eq("validation_failed")
         expect(result["errors"]).not_to be_empty
-        expect(WebMock).not_to have_requested(:post, create_url)
+        expect(WebMock).not_to have_requested(:post, batch_url)
+      end
+    end
+
+    context "when batch transaction fails" do
+      before do
+        stub_request(:post, validation_url)
+          .to_return(status: 200, body: { "valid" => true, "warnings" => [] }.to_json)
+
+        # Simulate transactional batch failure (all-or-nothing)
+        stub_request(:post, batch_url)
+          .to_return(status: 400, body: {
+            "message" => "Transaction failed: Card name already exists",
+            "results" => [
+              { "status" => "error", "error" => "Card 'Test Card' already exists" }
+            ]
+          }.to_json)
+      end
+
+      it "returns error without creating partial data" do
+        result = tools.create_card_with_validation(
+          "Test Card",
+          type: "Species",
+          tags: ["Game"],
+          content: "Test content"
+        )
+
+        # Should return error status, not a valid card
+        expect(result["status"]).to eq("error")
+        expect(result).to have_key("message")
+        expect(result).to have_key("errors")
       end
     end
   end

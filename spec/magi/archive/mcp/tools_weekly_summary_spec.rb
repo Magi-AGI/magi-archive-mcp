@@ -101,6 +101,30 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
       expect(result.first["updated_at"]).to eq("2025-12-03T10:00:00Z")
       expect(result.last["updated_at"]).to eq("2025-12-02T15:30:00Z")
     end
+
+    it "prevents infinite loops with pagination safety counter" do
+      # Simulate a server bug where next_offset keeps incrementing
+      stub_request(:get, "#{base_url}/api/mcp/cards")
+        .to_return do |request|
+          offset = request.uri.query_values["offset"].to_i
+          {
+            status: 200,
+            body: {
+              cards: [{ "name" => "Card #{offset}", "updated_at" => "2025-12-03T10:00:00Z" }],
+              total: 10000,
+              offset: offset,
+              next_offset: offset + 1 # Bug: always returns next page
+            }.to_json
+          }
+        end
+
+      # Should stop after 100 pages and log warning
+      expect { result = tools.get_recent_changes }.to output(/Pagination safety limit reached/).to_stderr
+
+      # Verify it stopped and returned partial results
+      result = tools.get_recent_changes
+      expect(result.size).to eq(100) # 100 pages with 1 card each
+    end
   end
 
   describe "#scan_git_repos" do
@@ -143,6 +167,33 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
 
       repo_name = File.basename(test_repo_path)
       expect(result[repo_name]).to eq(commits)
+    end
+
+    it "handles git command timeout gracefully" do
+      # Simulate timeout by mocking Open3.capture3 to raise Timeout::Error
+      allow(Open3).to receive(:capture3).and_raise(Timeout::Error)
+
+      # Should log warning and return empty commits instead of crashing
+      expect { result = tools.send(:get_git_commits, test_repo_path, since: "2025-12-01") }
+        .to output(/Git log timed out/).to_stderr
+
+      result = tools.send(:get_git_commits, test_repo_path, since: "2025-12-01")
+      expect(result).to eq([])
+    end
+
+    it "uses Open3.capture3 with timeout for git commands" do
+      # Verify that Open3.capture3 is called with timeout parameter
+      expect(Open3).to receive(:capture3).with(
+        "git", "log",
+        "--since=2025-12-01",
+        "--pretty=format:%h|%an|%ad|%s",
+        "--date=short",
+        hash_including(chdir: test_repo_path, timeout: 30)
+      ).and_return(["abc123|Test|2025-12-03|Commit\n", "", double(success?: true)])
+
+      result = tools.send(:get_git_commits, test_repo_path, since: "2025-12-01")
+      expect(result.size).to eq(1)
+      expect(result.first["hash"]).to eq("abc123")
     end
   end
 
