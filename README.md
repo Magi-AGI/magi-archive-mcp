@@ -31,27 +31,35 @@ This MCP server enables AI agents (Claude, Gemini, Codex CLIs) to interact with 
 - **Weekly Summary Generation**: Automated weekly summaries combining wiki changes and repository activity
 - **🆕 MCP Server Integration**: Full Model Context Protocol server for Claude Desktop and Codex
 
-See [NEW_FEATURES.md](NEW_FEATURES.md), [WEEKLY_SUMMARY.md](WEEKLY_SUMMARY.md), and [MCP_SERVER.md](MCP_SERVER.md) for detailed documentation.
+See [MCP_SERVER.md](MCP_SERVER.md) for complete installation, authentication, tools reference, and usage guide.
 
 **Coming in Phase 3:**
 - Safe CQL (Card Query Language) queries with enforced limits
 - Async job management (spoiler scanning, bulk operations)
 - Advanced search and filtering
 
-## Quick Start: MCP Server for Claude Desktop
+## Quick Start: MCP Server
 
-Want to use Magi Archive directly in Claude Desktop? Install the MCP server:
+Want to use Magi Archive directly in Claude Desktop, Claude Code, or Codex?
 
+**Installation:**
 ```bash
 git clone https://github.com/your-org/magi-archive-mcp.git
 cd magi-archive-mcp
 bundle install
-ruby bin/install-claude-desktop
+
+# Choose your client:
+ruby bin/install-claude-desktop      # For Claude Desktop
+ruby bin/install-claude-code         # For Claude Code (VS Code)
+ruby bin/install-codex               # For Codex CLI
+ruby bin/install-chatgpt             # For ChatGPT Desktop (guide)
 ```
 
-The installer will configure Claude Desktop automatically. Restart Claude and start using Magi Archive tools!
+The installer configures your client automatically. Restart and start using all 16 Magi Archive tools!
 
-See [MCP_SERVER.md](MCP_SERVER.md) for complete installation and usage guide.
+**Available Tools:** get_card, search_cards, create_card, update_card, delete_card, list_children, get_tags, search_by_tags, get_relationships, validate_card, get_recommendations, get_types, render_content, admin_backup, create_weekly_summary, and more.
+
+See [MCP_SERVER.md](MCP_SERVER.md) for complete guide including authentication, security, deployment, and troubleshooting.
 
 ## Installation
 
@@ -205,28 +213,19 @@ markdown = tools.render_snippet("<h1>Hello</h1><p>This is <strong>bold</strong>.
 #### Weekly Summary Generation
 
 ```ruby
-# Create a weekly summary card (most common usage)
+# Create a weekly summary card
 card = tools.create_weekly_summary
 
-# Create summary with custom options
+# With custom options
 card = tools.create_weekly_summary(
-  base_path: "/path/to/repos",  # Where to scan git repos
-  days: 7,                        # How many days to look back
-  date: "2025 12 09",            # Date for card name
-  executive_summary: "This week focused on Phase 2.1 completion..."
+  base_path: "/path/to/repos",
+  days: 7,
+  date: "2025 12 09",
+  executive_summary: "Custom summary..."
 )
-
-# Preview summary without creating card
-preview = tools.create_weekly_summary(create_card: false)
-puts preview
-
-# Manual workflow with full control
-cards = tools.get_recent_changes(days: 7)
-repos = tools.scan_git_repos(base_path: "/path/to/repos")
-markdown = tools.format_weekly_summary(cards, repos)
 ```
 
-See [WEEKLY_SUMMARY.md](WEEKLY_SUMMARY.md) for complete documentation.
+See [MCP_SERVER.md](MCP_SERVER.md#weekly-summary-feature) for complete documentation.
 
 ### Using the CLI
 
@@ -485,7 +484,7 @@ end
 5. **Input validation**: Sanitize user inputs before API calls
 6. **Rate limiting**: Respect API rate limits (enforced server-side)
 
-See [SECURITY.md](SECURITY.md) for comprehensive security guidelines.
+See [MCP_SERVER.md](MCP_SERVER.md#security-best-practices) for comprehensive security guidelines.
 
 ## Contributing
 
@@ -498,12 +497,11 @@ See [SECURITY.md](SECURITY.md) for comprehensive security guidelines.
 
 ## Documentation
 
-- [Quick Start Guide](QUICKSTART.md) - Get started quickly
-- [Authentication Guide](AUTHENTICATION.md) - Detailed auth examples for all roles
-- [Security Guide](SECURITY.md) - Security best practices
-- [API Documentation](https://rubydoc.info/gems/magi-archive-mcp) - YARD docs
-- [MCP Specification](MCP-SPEC.md) - Full protocol specification
-- [Development Guide](AGENTS.md) - Development guidelines
+- **[MCP Server Guide](MCP_SERVER.md)** - Complete guide: installation, authentication, tools reference, security, deployment, troubleshooting
+- **[MCP Specification](MCP-SPEC.md)** - API specification and protocol details
+- **[Development Guide](AGENTS.md)** - Ruby development guidelines and project structure
+- **[Claude Code Guide](CLAUDE.md)** - Development guidance for AI-assisted coding
+- **[API Documentation](https://rubydoc.info/gems/magi-archive-mcp)** - YARD documentation
 
 ## License
 
@@ -515,9 +513,34 @@ MIT License - see [LICENSE](LICENSE) file for details
 - **Discussions**: [GitHub Discussions](https://github.com/your-org/magi-archive-mcp/discussions)
 - **Email**: support@magi-agi.org
 
-## Changelog
+## Version History
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+### v0.1.0 - Initial Release (December 2024)
+
+**Phase 1: Core Infrastructure**
+- JWT authentication with RS256 verification
+- Role-based access control (User, GM, Admin)
+- HTTP client with automatic retry and token refresh
+- Comprehensive error handling
+
+**Phase 2: MCP Tools**
+- 16 complete MCP tools for card operations, search, tags, relationships, validation, and admin functions
+- MCP Server implementation with JSON-RPC 2.0 over stdio
+- Auto-installers for Claude Desktop, Claude Code, Codex, and ChatGPT
+- Weekly summary generation with git repository scanning
+
+**Phase 2.1: Advanced Features**
+- Username/password authentication (in addition to API keys)
+- Database backup management (admin)
+- Card relationship exploration (referers, nests, links)
+- Tag validation and structure recommendations
+- Content rendering (HTML ↔ Markdown)
+
+**Testing & Documentation**
+- 102 RSpec tests (100% passing)
+- Comprehensive MCP Server guide
+- Complete tools reference
+- Security best practices
 
 ## Related Projects
 
