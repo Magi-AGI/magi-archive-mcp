@@ -37,11 +37,11 @@ RSpec.describe Magi::Archive::Mcp::Config do
       end
     end
 
-    context "with missing API key" do
-      it "raises ConfigurationError" do
+    context "with missing credentials" do
+      it "raises ConfigurationError for missing both auth methods" do
         expect { described_class.new }.to raise_error(
           Magi::Archive::Mcp::Config::ConfigurationError,
-          /MCP_API_KEY is required/
+          /Must provide either \(MCP_USERNAME \+ MCP_PASSWORD\) or MCP_API_KEY/
         )
       end
     end

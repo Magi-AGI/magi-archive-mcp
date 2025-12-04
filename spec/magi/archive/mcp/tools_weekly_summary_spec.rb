@@ -8,8 +8,20 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
   let(:base_url) { "https://test.example.com" }
 
   before do
+    # Set up required environment variables for config initialization
+    ENV["MCP_API_KEY"] = "test-api-key-123"
+    ENV["MCP_ROLE"] = "user"
+    ENV["DECKO_API_BASE_URL"] = base_url
+
     allow_any_instance_of(Magi::Archive::Mcp::Client).to receive(:base_url).and_return(base_url)
     allow_any_instance_of(Magi::Archive::Mcp::Auth).to receive(:token).and_return(valid_token)
+  end
+
+  after do
+    # Clean up environment variables
+    ENV.delete("MCP_API_KEY")
+    ENV.delete("MCP_ROLE")
+    ENV.delete("DECKO_API_BASE_URL")
   end
 
   describe "#get_recent_changes" do

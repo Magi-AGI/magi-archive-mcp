@@ -5,13 +5,21 @@ require "webmock/rspec"
 require "magi/archive/mcp/tools"
 
 RSpec.describe Magi::Archive::Mcp::Tools, "new features" do
-  let(:config) do
+  before do
+    # Set up required environment variables before config initialization
     ENV["MCP_API_KEY"] = "test-api-key"
     ENV["DECKO_API_BASE_URL"] = "https://test.example.com/api/mcp"
     ENV["MCP_ROLE"] = "admin"
-    Magi::Archive::Mcp::Config.new
   end
 
+  after do
+    # Clean up environment variables
+    ENV.delete("MCP_API_KEY")
+    ENV.delete("DECKO_API_BASE_URL")
+    ENV.delete("MCP_ROLE")
+  end
+
+  let(:config) { Magi::Archive::Mcp::Config.new }
   let(:client) { Magi::Archive::Mcp::Client.new(config) }
   let(:tools) { Magi::Archive::Mcp::Tools.new(client) }
 
