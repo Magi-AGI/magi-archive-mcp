@@ -17,17 +17,16 @@ GEM
     crack (1.0.1)
       bigdecimal
       rexml
-    date (3.5.0)
     diff-lcs (1.6.2)
     domain_name (0.6.20240107)
     dotenv (2.8.1)
-    erb (6.0.0)
     ffi (1.17.2)
     ffi (1.17.2-aarch64-linux-gnu)
     ffi (1.17.2-aarch64-linux-musl)
     ffi (1.17.2-arm-linux-gnu)
     ffi (1.17.2-arm-linux-musl)
     ffi (1.17.2-arm64-darwin)
+    ffi (1.17.2-x64-mingw-ucrt)
     ffi (1.17.2-x86-linux-gnu)
     ffi (1.17.2-x86-linux-musl)
     ffi (1.17.2-x86_64-darwin)
@@ -45,12 +44,8 @@ GEM
     http-cookie (1.1.0)
       domain_name (~> 0.5)
     http-form_data (2.3.0)
-    io-console (0.8.1)
-    irb (1.15.3)
-      pp (>= 0.6.0)
-      rdoc (>= 4.0.0)
-      reline (>= 0.4.2)
     json (2.16.0)
+    json_rpc_handler (0.1.1)
     jwt (2.10.2)
       base64
     language_server-protocol (3.17.0.5)
@@ -58,28 +53,18 @@ GEM
     llhttp-ffi (0.5.1)
       ffi-compiler (~> 1.0)
       rake (~> 13.0)
+    mcp (0.1.0)
+      json_rpc_handler (~> 0.1)
     parallel (1.27.0)
     parser (3.3.10.0)
       ast (~> 2.4.1)
       racc
-    pp (0.6.3)
-      prettyprint
-    prettyprint (0.2.0)
     prism (1.6.0)
-    psych (5.2.6)
-      date
-      stringio
     public_suffix (7.0.0)
     racc (1.8.1)
     rainbow (3.1.1)
     rake (13.3.1)
-    rdoc (6.16.1)
-      erb
-      psych (>= 4.0.0)
-      tsort
     regexp_parser (2.11.3)
-    reline (0.6.3)
-      io-console (~> 0.5)
     rexml (3.4.4)
     rspec (3.13.2)
       rspec-core (~> 3.13.0)
@@ -109,8 +94,6 @@ GEM
       parser (>= 3.3.7.2)
       prism (~> 1.4)
     ruby-progressbar (1.13.0)
-    stringio (3.1.9)
-    tsort (0.2.0)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.1.0)
@@ -128,6 +111,7 @@ PLATFORMS
   arm-linux-musl
   arm64-darwin
   ruby
+  x64-mingw-ucrt
   x86-linux-gnu
   x86-linux-musl
   x86_64-darwin
@@ -135,8 +119,8 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
-  irb
   magi-archive-mcp!
+  mcp (~> 0.1.0)
   rake (~> 13.0)
   rspec (~> 3.0)
   rubocop (~> 1.21)

@@ -5,7 +5,7 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in magi-archive-mcp.gemspec
 gemspec
 
-gem "irb"
+# gem "irb"  # Temporarily disabled - native extension issues on Windows
 gem "rake", "~> 13.0"
 
 # Testing
