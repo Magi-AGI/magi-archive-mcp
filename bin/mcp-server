@@ -1,0 +1,77 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# MCP Server executable for Magi Archive
+# This server implements the Model Context Protocol to enable
+# Claude Desktop, Codex, and other MCP clients to interact with
+# the Magi Archive wiki.
+
+require "bundler/setup"
+require "mcp"
+require_relative "../lib/magi/archive/mcp"
+
+# Load all MCP tool classes
+require_relative "../lib/magi/archive/mcp/server/tools/get_card"
+require_relative "../lib/magi/archive/mcp/server/tools/search_cards"
+require_relative "../lib/magi/archive/mcp/server/tools/create_card"
+require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
+
+# Initialize the Magi Archive tools
+# This creates an authenticated client using environment variables:
+# - MCP_USERNAME + MCP_PASSWORD (recommended)
+# - OR MCP_API_KEY + MCP_ROLE
+magi_tools = begin
+  Magi::Archive::Mcp::Tools.new
+rescue StandardError => e
+  $stderr.puts "Error initializing Magi Archive tools: #{e.message}"
+  $stderr.puts "Please ensure you have configured authentication in .env or environment variables:"
+  $stderr.puts "  MCP_USERNAME=<your-username>"
+  $stderr.puts "  MCP_PASSWORD=<your-password>"
+  $stderr.puts "OR:"
+  $stderr.puts "  MCP_API_KEY=<your-api-key>"
+  $stderr.puts "  MCP_ROLE=user|gm|admin"
+  exit 1
+end
+
+# Get working directory from args or environment
+working_directory = ARGV[0] || ENV["MAGI_WORKING_DIR"] || Dir.pwd
+
+# Create server context with our tools instance
+server_context = {
+  magi_tools: magi_tools,
+  working_directory: working_directory
+}
+
+# Create the MCP server
+server = ::MCP::Server.new(
+  name: "magi-archive",
+  version: Magi::Archive::Mcp::VERSION,
+  tools: [
+    Magi::Archive::Mcp::Server::Tools::GetCard,
+    Magi::Archive::Mcp::Server::Tools::SearchCards,
+    Magi::Archive::Mcp::Server::Tools::CreateCard,
+    Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary
+  ],
+  server_context: server_context
+)
+
+# Set up stdio transport
+transport = ::MCP::Server::Transports::StdioTransport.new(server)
+
+# Log startup to stderr (stdio is for JSON-RPC communication)
+$stderr.puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
+$stderr.puts "Working directory: #{working_directory}"
+$stderr.puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
+$stderr.puts "Ready for MCP requests via stdio..."
+
+# Start the server
+begin
+  transport.open
+rescue Interrupt
+  $stderr.puts "\nShutting down gracefully..."
+  exit 0
+rescue StandardError => e
+  $stderr.puts "Fatal error: #{e.message}"
+  $stderr.puts e.backtrace.join("\n")
+  exit 1
+end

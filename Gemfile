@@ -1,0 +1,20 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Specify your gem's dependencies in magi-archive-mcp.gemspec
+gemspec
+
+gem "irb"
+gem "rake", "~> 13.0"
+
+# Testing
+gem "rspec", "~> 3.0"
+gem "vcr", "~> 6.0"
+gem "webmock", "~> 3.18"
+
+# Code quality
+gem "rubocop", "~> 1.21"
+
+# MCP Server
+gem "mcp", "~> 0.1.0"

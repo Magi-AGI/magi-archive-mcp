@@ -1,0 +1,88 @@
+# frozen_string_literal: true
+
+require "mcp"
+
+module Magi
+  module Archive
+    module Mcp
+      module Server
+        module Tools
+          # MCP Tool for fetching a single card from the wiki
+          class GetCard < ::MCP::Tool
+            description "Get a single card by name from the Magi Archive wiki"
+
+            input_schema(
+              properties: {
+                name: {
+                  type: "string",
+                  description: "The name of the card to fetch (e.g., 'Main Page' or 'Business Plan+Executive Summary')"
+                },
+                with_children: {
+                  type: "boolean",
+                  description: "Include child cards in the response",
+                  default: false
+                }
+              },
+              required: ["name"]
+            )
+
+            class << self
+              def call(name:, with_children: false, server_context:)
+                tools = server_context[:magi_tools]
+
+                card = tools.get_card(name, with_children: with_children)
+
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: format_card(card)
+                }])
+              rescue Client::NotFoundError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: "Error: Card '#{name}' not found"
+                }], is_error: true)
+              rescue Client::AuthorizationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: "Error: Not authorized to view card '#{name}'"
+                }], is_error: true)
+              rescue StandardError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: "Error: #{e.message}"
+                }], is_error: true)
+              end
+
+              private
+
+              def format_card(card)
+                parts = []
+                parts << "# #{card['name']}"
+                parts << ""
+                parts << "**Type:** #{card['type']}"
+                parts << "**ID:** #{card['id']}" if card['id']
+                parts << "**Updated:** #{card['updated_at']}" if card['updated_at']
+                parts << "**URL:** #{card['url']}" if card['url']
+                parts << ""
+                parts << "## Content"
+                parts << ""
+                parts << (card['content'] || '(empty)')
+
+                if card['children']&.any?
+                  parts << ""
+                  parts << "## Children (#{card['children'].size})"
+                  parts << ""
+                  card['children'].each do |child|
+                    parts << "- #{child['name']} (#{child['type']})"
+                  end
+                end
+
+                parts.join("\n")
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

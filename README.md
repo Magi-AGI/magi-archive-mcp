@@ -29,13 +29,29 @@ This MCP server enables AI agents (Claude, Gemini, Codex CLIs) to interact with 
 - **Tag Validation**: Validate tags based on card type with content-based suggestions
 - **Structure Recommendations**: Get comprehensive structure recommendations to prevent hallucinations
 - **Weekly Summary Generation**: Automated weekly summaries combining wiki changes and repository activity
+- **🆕 MCP Server Integration**: Full Model Context Protocol server for Claude Desktop and Codex
 
-See [NEW_FEATURES.md](NEW_FEATURES.md) and [WEEKLY_SUMMARY.md](WEEKLY_SUMMARY.md) for detailed documentation.
+See [NEW_FEATURES.md](NEW_FEATURES.md), [WEEKLY_SUMMARY.md](WEEKLY_SUMMARY.md), and [MCP_SERVER.md](MCP_SERVER.md) for detailed documentation.
 
 **Coming in Phase 3:**
 - Safe CQL (Card Query Language) queries with enforced limits
 - Async job management (spoiler scanning, bulk operations)
 - Advanced search and filtering
+
+## Quick Start: MCP Server for Claude Desktop
+
+Want to use Magi Archive directly in Claude Desktop? Install the MCP server:
+
+```bash
+git clone https://github.com/your-org/magi-archive-mcp.git
+cd magi-archive-mcp
+bundle install
+ruby bin/install-claude-desktop
+```
+
+The installer will configure Claude Desktop automatically. Restart Claude and start using Magi Archive tools!
+
+See [MCP_SERVER.md](MCP_SERVER.md) for complete installation and usage guide.
 
 ## Installation
 

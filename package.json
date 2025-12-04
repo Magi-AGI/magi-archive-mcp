@@ -1,0 +1,42 @@
+{
+  "name": "magi-archive-mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Magi Archive wiki - enables Claude Desktop and Codex integration",
+  "main": "index.js",
+  "bin": {
+    "magi-archive-mcp": "./mcp-wrapper.js",
+    "magi-archive-install-claude": "./install-claude.js",
+    "magi-archive-install-codex": "./install-codex.js"
+  },
+  "scripts": {
+    "install": "bundle install",
+    "postinstall": "chmod +x bin/mcp-server bin/install-claude-desktop bin/install-codex"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "codex",
+    "magi",
+    "wiki",
+    "decko"
+  ],
+  "author": "Magi AGI",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/magi-archive-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/magi-archive-mcp/issues"
+  },
+  "homepage": "https://wiki.magi-agi.org"
+}
