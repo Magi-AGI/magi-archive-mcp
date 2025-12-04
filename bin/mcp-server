@@ -11,9 +11,33 @@ require "mcp"
 require_relative "../lib/magi/archive/mcp"
 
 # Load all MCP tool classes
+# Core card operations
 require_relative "../lib/magi/archive/mcp/server/tools/get_card"
 require_relative "../lib/magi/archive/mcp/server/tools/search_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/create_card"
+require_relative "../lib/magi/archive/mcp/server/tools/update_card"
+require_relative "../lib/magi/archive/mcp/server/tools/delete_card"
+require_relative "../lib/magi/archive/mcp/server/tools/list_children"
+
+# Tag operations
+require_relative "../lib/magi/archive/mcp/server/tools/get_tags"
+require_relative "../lib/magi/archive/mcp/server/tools/search_by_tags"
+
+# Relationships
+require_relative "../lib/magi/archive/mcp/server/tools/get_relationships"
+
+# Validation and recommendations
+require_relative "../lib/magi/archive/mcp/server/tools/validate_card"
+require_relative "../lib/magi/archive/mcp/server/tools/get_recommendations"
+
+# Types and rendering
+require_relative "../lib/magi/archive/mcp/server/tools/get_types"
+require_relative "../lib/magi/archive/mcp/server/tools/render_content"
+
+# Admin operations
+require_relative "../lib/magi/archive/mcp/server/tools/admin_backup"
+
+# Weekly summaries
 require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
 
 # Initialize the Magi Archive tools
@@ -47,9 +71,33 @@ server = ::MCP::Server.new(
   name: "magi-archive",
   version: Magi::Archive::Mcp::VERSION,
   tools: [
+    # Core card operations
     Magi::Archive::Mcp::Server::Tools::GetCard,
     Magi::Archive::Mcp::Server::Tools::SearchCards,
     Magi::Archive::Mcp::Server::Tools::CreateCard,
+    Magi::Archive::Mcp::Server::Tools::UpdateCard,
+    Magi::Archive::Mcp::Server::Tools::DeleteCard,
+    Magi::Archive::Mcp::Server::Tools::ListChildren,
+
+    # Tag operations
+    Magi::Archive::Mcp::Server::Tools::GetTags,
+    Magi::Archive::Mcp::Server::Tools::SearchByTags,
+
+    # Relationships
+    Magi::Archive::Mcp::Server::Tools::GetRelationships,
+
+    # Validation and recommendations
+    Magi::Archive::Mcp::Server::Tools::ValidateCard,
+    Magi::Archive::Mcp::Server::Tools::GetRecommendations,
+
+    # Types and rendering
+    Magi::Archive::Mcp::Server::Tools::GetTypes,
+    Magi::Archive::Mcp::Server::Tools::RenderContent,
+
+    # Admin operations
+    Magi::Archive::Mcp::Server::Tools::AdminBackup,
+
+    # Weekly summaries
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary
   ],
   server_context: server_context

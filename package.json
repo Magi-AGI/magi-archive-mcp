@@ -6,11 +6,13 @@
   "bin": {
     "magi-archive-mcp": "./mcp-wrapper.js",
     "magi-archive-install-claude": "./install-claude.js",
-    "magi-archive-install-codex": "./install-codex.js"
+    "magi-archive-install-claude-code": "./install-claude-code.js",
+    "magi-archive-install-codex": "./install-codex.js",
+    "magi-archive-install-chatgpt": "./install-chatgpt.js"
   },
   "scripts": {
     "install": "bundle install",
-    "postinstall": "chmod +x bin/mcp-server bin/install-claude-desktop bin/install-codex"
+    "postinstall": "chmod +x bin/mcp-server bin/install-claude-desktop bin/install-claude-code bin/install-codex bin/install-chatgpt"
   },
   "keywords": [
     "mcp",
