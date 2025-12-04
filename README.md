@@ -1,6 +1,6 @@
-# Magi Archive MCP Server
+# Magi Archive MCP Client & Tools
 
-A Ruby implementation of the Model Context Protocol (MCP) providing secure, role-aware API access to the Magi Archive Decko application at `wiki.magi-agi.org`.
+A Ruby client library and MCP protocol server for the Magi Archive API (`wiki.magi-agi.org`). This package provides both a Ruby library for programmatic access and MCP protocol tools for integration with AI assistants like Claude Desktop, Claude Code, and Codex.
 
 [![Ruby](https://img.shields.io/badge/Ruby-3.2%2B-red)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,7 +10,12 @@ A Ruby implementation of the Model Context Protocol (MCP) providing secure, role
 
 ## Overview
 
-This MCP server enables AI agents (Claude, Gemini, Codex CLIs) to interact with the Magi Archive through a structured JSON API, replacing legacy SSH scripts with a modern, secure protocol. It implements role-based access control with three security levels: User, GM (Game Master), and Admin.
+This package has two main components:
+
+1. **Ruby Client Library** (`lib/magi/archive/mcp/`) - A Ruby HTTP client for the Magi Archive API with authentication, retry logic, and role-based access control
+2. **MCP Protocol Server** (`lib/magi/archive/mcp/server/tools/`) - Model Context Protocol tools that enable Claude Desktop, Codex, and other MCP clients to interact with Magi Archive
+
+The client library connects to the **Magi Archive API server** (separate repository), which provides the actual backend services. This package makes those services accessible through both Ruby code and MCP-compatible AI assistants.
 
 **Current Implementation: Phase 2** - Core functionality complete and production-ready.
 
@@ -29,7 +34,7 @@ This MCP server enables AI agents (Claude, Gemini, Codex CLIs) to interact with 
 - **Tag Validation**: Validate tags based on card type with content-based suggestions
 - **Structure Recommendations**: Get comprehensive structure recommendations to prevent hallucinations
 - **Weekly Summary Generation**: Automated weekly summaries combining wiki changes and repository activity
-- **🆕 MCP Server Integration**: Full Model Context Protocol server for Claude Desktop and Codex
+- **🆕 MCP Protocol Tools**: Full Model Context Protocol server for Claude Desktop and Codex
 
 See [MCP_SERVER.md](MCP_SERVER.md) for complete installation, authentication, tools reference, and usage guide.
 
@@ -38,7 +43,7 @@ See [MCP_SERVER.md](MCP_SERVER.md) for complete installation, authentication, to
 - Async job management (spoiler scanning, bulk operations)
 - Advanced search and filtering
 
-## Quick Start: MCP Server
+## Quick Start: MCP Protocol Integration
 
 Want to use Magi Archive directly in Claude Desktop, Claude Code, or Codex?
 
@@ -342,16 +347,16 @@ Options:
 
 ### Authentication Flow
 
-1. Client provides `MCP_API_KEY` and requested role in environment
-2. MCP server calls `POST /api/mcp/auth` with credentials
-3. Decko issues short-lived RS256 JWT (15-60 min expiry)
+1. Client library reads credentials from environment (API key or username/password)
+2. Client library calls `POST /api/mcp/auth` on the Magi Archive API server
+3. API server issues short-lived RS256 JWT (15-60 min expiry)
 4. JWT includes claims: `sub`, `role`, `iss`, `iat`, `exp`, `jti`, `kid`
-5. Server verifies signature via JWKS endpoint
-6. Token automatically refreshes before expiry
+5. Client library verifies JWT signature via API server's JWKS endpoint
+6. Client library automatically refreshes token before expiry
 
-### API Endpoints
+### Magi Archive API Server Endpoints
 
-All requests to Decko API require `Authorization: Bearer <jwt_token>`:
+The client library connects to these endpoints on the Magi Archive API server (separate repository). All requests require `Authorization: Bearer <jwt_token>`:
 
 **Phase 2 (Currently Implemented):**
 - `POST /api/mcp/auth` - Get role-scoped JWT
@@ -431,10 +436,10 @@ bundle exec rake console
 ```
 lib/magi/archive/
 ├── mcp/
-│   ├── server.rb          # Main MCP server
+│   ├── server.rb          # MCP protocol server (JSON-RPC over stdio)
 │   ├── tools.rb           # MCP tool implementations
-│   ├── client.rb          # Decko API HTTP client
-│   ├── auth.rb            # JWT verification
+│   ├── client.rb          # HTTP client for Magi Archive API
+│   ├── auth.rb            # JWT verification logic
 │   ├── config.rb          # Configuration management
 │   └── version.rb         # Version constant
 └── mcp.rb                 # Main module
