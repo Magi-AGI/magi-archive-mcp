@@ -1,21 +1,21 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Auto-installer for Codex CLI MCP server configuration
+# Auto-installer for Claude Code CLI MCP server configuration
 #
-# This script automatically configures Codex CLI to use the
-# Magi Archive MCP server using the 'codex mcp add' command
+# This script automatically configures Claude Code CLI to use the
+# Magi Archive MCP server using the 'claude mcp add' command
 
 require "fileutils"
 
-class CodexInstaller
+class ClaudeCliInstaller
   def initialize
     @server_path = File.expand_path("../mcp-server", __FILE__)
     @gem_root = File.expand_path("../..", @server_path)
   end
 
   def run
-    puts "🚀 Magi Archive MCP Server - Codex CLI Installer"
+    puts "🚀 Magi Archive MCP Server - Claude Code CLI Installer"
     puts ""
 
     # Check if server script exists
@@ -28,10 +28,11 @@ class CodexInstaller
     # Make server executable
     FileUtils.chmod(0755, @server_path)
 
-    # Check if codex command exists
-    unless system("which codex > /dev/null 2>&1") || system("where codex > NUL 2>&1")
-      puts "❌ Error: 'codex' command not found"
-      puts "Please install Codex CLI first"
+    # Check if claude command exists
+    unless system("which claude > /dev/null 2>&1") || system("where claude > NUL 2>&1")
+      puts "❌ Error: 'claude' command not found"
+      puts "Please install Claude Code CLI first:"
+      puts "  npm install -g @anthropic-ai/claude-code"
       exit 1
     end
 
@@ -57,13 +58,15 @@ class CodexInstaller
     working_dir = gets.chomp
     working_dir = Dir.pwd if working_dir.empty?
 
-    # Build the codex mcp add command
+    # Build the claude mcp add command
     puts ""
-    puts "📦 Registering MCP server with Codex CLI..."
+    puts "📦 Registering MCP server with Claude Code CLI..."
     puts ""
 
-    # Remove existing server if it exists
-    system("codex mcp remove magi-archive > /dev/null 2>&1")
+    # Remove existing server if it exists (try all scopes)
+    system("claude mcp remove --scope user magi-archive > /dev/null 2>&1")
+    system("claude mcp remove --scope local magi-archive > /dev/null 2>&1")
+    system("claude mcp remove --scope project magi-archive > /dev/null 2>&1")
 
     # Build env flags
     env_flags = []
@@ -78,9 +81,11 @@ class CodexInstaller
     env_flags << "--env"
     env_flags << "BUNDLE_GEMFILE=#{File.join(@gem_root, 'Gemfile')}"
 
-    # Build full command
+    # Build full command with user (global) scope
     cmd = [
-      "codex", "mcp", "add",
+      "claude", "mcp", "add",
+      "--scope", "user",
+      "--transport", "stdio",
       "magi-archive",
       *env_flags,
       "--",
@@ -99,12 +104,12 @@ class CodexInstaller
       puts "✅ Installation complete!"
       puts ""
       puts "Verify installation:"
-      puts "  codex mcp list"
+      puts "  claude mcp list"
       puts ""
       puts "Next steps:"
-      puts "  1. The Magi Archive tools are now available in Codex"
+      puts "  1. The Magi Archive tools are now available in Claude Code"
       puts "  2. Start a new conversation or use an existing one"
-      puts "  3. Try: codex 'Get the Main Page card from Magi Archive'"
+      puts "  3. Try: 'Get the Main Page card from Magi Archive'"
       puts ""
       puts "Available tools:"
       puts "  - get_card, search_cards, create_card, update_card, delete_card"
@@ -154,4 +159,4 @@ class CodexInstaller
 end
 
 # Run the installer
-CodexInstaller.new.run
+ClaudeCliInstaller.new.run

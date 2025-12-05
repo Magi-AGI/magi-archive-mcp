@@ -55,13 +55,17 @@ class ClaudeCodeInstaller
     working_dir = gets.chomp
     working_dir = Dir.pwd if working_dir.empty?
 
+    # Get the gem root directory (where Gemfile is located)
+    gem_root = File.expand_path("../..", @server_path)
+
     # Add Magi Archive server config
     config["mcpServers"] ||= {}
     config["mcpServers"]["magi-archive"] = {
-      "command" => "ruby",
-      "args" => [@server_path, working_dir],
+      "command" => "bundle",
+      "args" => ["exec", "ruby", @server_path, working_dir],
       "env" => env_vars.merge({
-        "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp"
+        "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp",
+        "BUNDLE_GEMFILE" => File.join(gem_root, "Gemfile")
       })
     }
 

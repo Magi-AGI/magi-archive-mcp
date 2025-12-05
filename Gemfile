@@ -17,4 +17,4 @@ gem "webmock", "~> 3.18"
 gem "rubocop", "~> 1.21"
 
 # MCP Server
-gem "mcp", "~> 0.1.0"
+gem "mcp", "~> 0.4.0"

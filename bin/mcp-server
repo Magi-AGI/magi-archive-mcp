@@ -103,8 +103,11 @@ server = ::MCP::Server.new(
   server_context: server_context
 )
 
+# Require the stdio transport
+require "mcp/transports/stdio"
+
 # Set up stdio transport
-transport = ::MCP::Server::Transports::StdioTransport.new(server)
+transport = ::MCP::Transports::StdioTransport.new(server)
 
 # Log startup to stderr (stdio is for JSON-RPC communication)
 $stderr.puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
