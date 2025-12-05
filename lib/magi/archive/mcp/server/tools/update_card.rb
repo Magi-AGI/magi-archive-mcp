@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "mcp"
+require_relative "../error_formatter"
 
 module Magi
   module Archive
@@ -46,17 +47,27 @@ module Magi
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: Card '#{name}' not found"
+                  text: ErrorFormatter.not_found("Card", name)
                 }], is_error: true)
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Validation error: #{e.message}"
+                  text: ErrorFormatter.validation_error(e.message)
+                }], is_error: true)
+              rescue Client::AuthorizationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authorization_error("update", name, required_role: "user")
+                }], is_error: true)
+              rescue Client::AuthenticationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authentication_error(e.message)
                 }], is_error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error updating card: #{e.message}"
+                  text: ErrorFormatter.generic_error("updating card '#{name}'", e)
                 }], is_error: true)
               end
 

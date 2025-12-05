@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "mcp"
+require_relative "../error_formatter"
 
 module Magi
   module Archive
@@ -41,12 +42,22 @@ module Magi
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: Parent card '#{parent_name}' not found"
+                  text: ErrorFormatter.not_found("Card", parent_name)
+                }], is_error: true)
+              rescue Client::AuthorizationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authorization_error("view children of", parent_name, required_role: "gm")
+                }], is_error: true)
+              rescue Client::AuthenticationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authentication_error(e.message)
                 }], is_error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error listing children: #{e.message}"
+                  text: ErrorFormatter.generic_error("listing children of '#{parent_name}'", e)
                 }], is_error: true)
               end
 

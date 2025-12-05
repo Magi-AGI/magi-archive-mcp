@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "mcp"
+require_relative "../error_formatter"
 
 module Magi
   module Archive
@@ -52,10 +53,20 @@ module Magi
                   type: "text",
                   text: format_results(results)
                 }])
+              rescue Client::AuthorizationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authorization_error("search", "cards", required_role: "user")
+                }], is_error: true)
+              rescue Client::AuthenticationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authentication_error(e.message)
+                }], is_error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: #{e.message}"
+                  text: ErrorFormatter.generic_error("searching cards", e)
                 }], is_error: true)
               end
 
