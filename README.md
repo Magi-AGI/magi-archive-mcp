@@ -48,12 +48,36 @@ See [MCP_SERVER.md](MCP_SERVER.md) for complete installation, authentication, to
 
 Want to use Magi Archive directly in Claude Desktop, Claude Code, Codex, or ChatGPT Desktop?
 
-**For ChatGPT Desktop (via npm):**
+**For ChatGPT Desktop (via npm + custom connector):**
 ```bash
+# 1. Install the MCP server globally
 npm install -g @magi-agi/mcp-server
-# Set MCP_USERNAME and MCP_PASSWORD in environment
-# Restart ChatGPT Desktop - server auto-discovered!
+
+# 2. Set environment variables (Windows PowerShell)
+$env:MCP_USERNAME="your-username"
+$env:MCP_PASSWORD="your-password"
+
+# Or for Linux/Mac (bash/zsh)
+export MCP_USERNAME=your-username
+export MCP_PASSWORD=your-password
+
+# 3. In ChatGPT Desktop:
+#    - Go to Settings → Connectors → Create
+#    - Configure the custom connector (see below)
 ```
+
+**ChatGPT Desktop Connector Configuration:**
+1. Open ChatGPT Desktop
+2. Navigate to **Settings → Connectors → Create**
+3. Configure the connector:
+   - **Name**: Magi Archive
+   - **Command**: `magi-archive-mcp`
+   - **Environment Variables**:
+     - `MCP_USERNAME`: your Decko wiki username
+     - `MCP_PASSWORD`: your Decko wiki password
+4. Save and the server will be available immediately
+
+**Note**: The server will also be available via the official MCP registry soon.
 
 **For Claude Desktop, Claude Code, or Codex:**
 ```bash
