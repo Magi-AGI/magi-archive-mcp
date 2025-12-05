@@ -5,14 +5,42 @@ This guide covers publishing the Magi Archive MCP Server to npm and registering 
 ## Prerequisites
 
 1. **npm Account**: Create account at https://www.npmjs.com
-2. **npm CLI**: Ensure npm is installed and logged in
-3. **mcp.run Account**: Create account at https://mcp.run
-4. **Repository Access**: Push access to the GitHub repository
+2. **npm CLI**: Ensure npm is installed (Node.js 16+ recommended)
+3. **Two-Factor Authentication**: Enable 2FA on your npm account (required for publishing)
+4. **mcp.run Account**: Create account at https://mcp.run
+5. **Repository Access**: Push access to the GitHub repository
+
+## Important: npm Security Updates (2025)
+
+**Classic npm tokens are deprecated and will be revoked.** You must use one of these authentication methods:
+
+### For Manual Publishing (Recommended)
+Use `npm login` which creates secure granular access tokens:
+```bash
+npm login
+# Follow interactive prompts - uses WebAuthn or authenticator app
+```
+
+### For CI/CD (Recommended)
+Use **Trusted Publishing** (OIDC) which provides temporary, job-specific credentials without long-lived tokens:
+- GitHub Actions: Configure OIDC trust relationship
+- No token storage required
+- Automatic rotation and better audit trails
+- See: https://docs.npmjs.com/generating-provenance-statements
+
+### For Automation (Legacy)
+If you must use tokens, create **granular access tokens** (not classic tokens):
+- Default expiration: 7 days
+- Maximum expiration: 90 days
+- Scope to specific packages and operations
+- See: https://docs.npmjs.com/about-access-tokens
+
+**Important:** Never use classic tokens - they are being sunset and will stop working.
 
 ## Quick Reference
 
 ```bash
-# Login to npm (first time only)
+# Login to npm (first time only) - creates granular tokens automatically
 npm login
 
 # Publish to npm
@@ -257,12 +285,32 @@ Common issues:
 
 ## Security Considerations
 
+### npm Authentication Security (Critical)
+
+1. **Use Granular Tokens Only**: Classic tokens are deprecated and will be revoked
+   - Manual publishing: Use `npm login` (creates granular tokens automatically)
+   - CI/CD: Use Trusted Publishing (OIDC) - no tokens needed
+   - Automation: Create granular access tokens (7-90 day expiration)
+   - See: https://github.blog/changelog/2025-09-29-strengthening-npm-security-important-changes-to-authentication-and-token-management/
+
+2. **Token Lifetime Management**:
+   - Granular tokens expire after 7 days by default (90 days maximum)
+   - Plan to refresh tokens before expiration
+   - Monitor npm for expiration warnings
+   - Consider switching to Trusted Publishing to avoid token management
+
+3. **Migrate from Classic Tokens**: If you're using classic tokens:
+   - Generate new granular access tokens immediately
+   - Update all automation/CI/CD configurations
+   - Revoke old classic tokens
+   - Classic tokens will stop working after mid-November 2025
+
 ### Package Security
 
 1. **Never commit secrets**: Exclude `.env` files
 2. **Review dependencies**: Run `npm audit` before publishing
-3. **Sign releases**: Consider using npm provenance
-4. **Enable 2FA**: Require 2FA for npm publishing
+3. **Sign releases**: Use npm provenance (automatic with Trusted Publishing)
+4. **Enable 2FA**: Required for npm publishing (use WebAuthn/passkeys, not TOTP)
 
 ### mcp.run Security
 
@@ -274,6 +322,9 @@ Common issues:
 ## Resources
 
 - **npm Documentation**: https://docs.npmjs.com/
+- **npm Security Updates (2025)**: https://github.blog/changelog/2025-09-29-strengthening-npm-security-important-changes-to-authentication-and-token-management/
+- **npm Granular Access Tokens**: https://docs.npmjs.com/about-access-tokens
+- **npm Trusted Publishing**: https://docs.npmjs.com/generating-provenance-statements
 - **mcp.run Docs**: https://docs.mcp.run
 - **MCP Specification**: https://modelcontextprotocol.io
 - **Semantic Versioning**: https://semver.org/
