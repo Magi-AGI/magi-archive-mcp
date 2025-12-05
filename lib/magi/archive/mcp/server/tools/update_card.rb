@@ -10,6 +10,8 @@ module Magi
         module Tools
           # MCP Tool for updating existing cards
           class UpdateCard < ::MCP::Tool
+            # Alias Client for cleaner error handling
+            Client = Magi::Archive::Mcp::Client
             description "Update an existing card in the Magi Archive wiki"
 
             input_schema(

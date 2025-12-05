@@ -10,6 +10,8 @@ module Magi
         module Tools
           # MCP Tool for listing child cards
           class ListChildren < ::MCP::Tool
+            # Alias Client for cleaner error handling
+            Client = Magi::Archive::Mcp::Client
             description "List all child cards of a parent card"
 
             input_schema(

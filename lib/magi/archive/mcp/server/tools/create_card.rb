@@ -10,6 +10,8 @@ module Magi
         module Tools
           # MCP Tool for creating new cards
           class CreateCard < ::MCP::Tool
+            # Alias Client for cleaner error handling
+            Client = Magi::Archive::Mcp::Client
             description "Create a new card in the Magi Archive wiki"
 
             input_schema(

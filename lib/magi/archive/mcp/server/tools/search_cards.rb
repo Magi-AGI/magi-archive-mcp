@@ -10,6 +10,8 @@ module Magi
         module Tools
           # MCP Tool for searching cards in the wiki
           class SearchCards < ::MCP::Tool
+            # Alias Client for cleaner error handling
+            Client = Magi::Archive::Mcp::Client
             description "Search for cards in the Magi Archive wiki by query, type, or other filters"
 
             input_schema(
