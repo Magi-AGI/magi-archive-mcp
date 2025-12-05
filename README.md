@@ -45,9 +45,16 @@ See [MCP_SERVER.md](MCP_SERVER.md) for complete installation, authentication, to
 
 ## Quick Start: MCP Protocol Integration
 
-Want to use Magi Archive directly in Claude Desktop, Claude Code, or Codex?
+Want to use Magi Archive directly in Claude Desktop, Claude Code, Codex, or ChatGPT Desktop?
 
-**Installation:**
+**For ChatGPT Desktop (via npm):**
+```bash
+npm install -g @magi-archive/mcp-server
+# Set MCP_USERNAME and MCP_PASSWORD in environment
+# Restart ChatGPT Desktop - server auto-discovered!
+```
+
+**For Claude Desktop, Claude Code, or Codex:**
 ```bash
 git clone https://github.com/your-org/magi-archive-mcp.git
 cd magi-archive-mcp
@@ -57,7 +64,7 @@ bundle install
 ruby bin/install-claude-desktop      # For Claude Desktop
 ruby bin/install-claude-code         # For Claude Code (VS Code)
 ruby bin/install-codex               # For Codex CLI
-ruby bin/install-chatgpt             # For ChatGPT Desktop (guide)
+ruby bin/install-chatgpt             # For ChatGPT Desktop (alternative setup)
 ```
 
 The installer configures your client automatically. Restart and start using all 16 Magi Archive tools!
@@ -82,6 +89,37 @@ cd magi-archive-mcp
 bundle install
 bundle exec rake install
 ```
+
+### Via npm (For ChatGPT Desktop)
+
+ChatGPT Desktop uses npm packages for MCP server discovery. Install globally:
+
+```bash
+npm install -g @magi-archive/mcp-server
+```
+
+**Prerequisites:**
+- Node.js 16+ and npm
+- Ruby 2.7+ with Bundler
+
+The npm package will automatically:
+1. Check for Ruby and Bundler
+2. Install Ruby dependencies via `bundle install`
+3. Make the MCP server available to ChatGPT Desktop
+
+**Configuration:**
+Set environment variables before using:
+
+```bash
+# ~/.bashrc or ~/.zshrc
+export MCP_USERNAME=your-decko-username
+export MCP_PASSWORD=your-decko-password
+# Or use API key:
+# export MCP_API_KEY=your-key
+# export MCP_ROLE=user
+```
+
+ChatGPT Desktop will automatically discover the server. Restart ChatGPT Desktop after installation.
 
 ### Development Setup
 

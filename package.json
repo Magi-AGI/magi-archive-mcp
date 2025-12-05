@@ -1,44 +1,49 @@
 {
-  "name": "magi-archive-mcp",
-  "version": "1.0.0",
-  "description": "Model Context Protocol server for Magi Archive wiki - enables Claude Desktop and Codex integration",
-  "main": "index.js",
+  "name": "@magi-archive/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Magi Archive wiki - provides AI agents secure access to the Magi Archive knowledge base",
+  "type": "module",
   "bin": {
-    "magi-archive-mcp": "./mcp-wrapper.js",
-    "magi-archive-install-claude": "./install-claude.js",
-    "magi-archive-install-claude-code": "./install-claude-code.js",
-    "magi-archive-install-codex": "./install-codex.js",
-    "magi-archive-install-chatgpt": "./install-chatgpt.js"
+    "magi-archive-mcp": "./bin/mcp-server-npm.js"
   },
   "scripts": {
-    "install": "bundle install",
-    "postinstall": "chmod +x bin/mcp-server bin/install-claude-desktop bin/install-claude-code bin/install-codex bin/install-chatgpt"
+    "postinstall": "node scripts/check-ruby.js"
   },
   "keywords": [
     "mcp",
-    "model-context-protocol",
-    "claude",
-    "codex",
-    "magi",
+    "mcp-server",
+    "magi-archive",
+    "decko",
     "wiki",
-    "decko"
+    "ai",
+    "knowledge-base"
   ],
-  "author": "Magi AGI",
+  "author": "Magi AGI Project",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/magi-archive-mcp.git"
+  },
+  "mcp": {
+    "server": {
+      "name": "magi-archive",
+      "description": "Access the Magi Archive wiki - search, create, and manage cards with role-based permissions",
+      "version": "0.1.0",
+      "capabilities": {
+        "tools": true
+      },
+      "authentication": {
+        "type": "api-key",
+        "description": "Requires MCP_USERNAME and MCP_PASSWORD or MCP_API_KEY environment variables"
+      }
+    }
+  },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=16.0.0"
   },
   "os": [
     "darwin",
     "linux",
     "win32"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-org/magi-archive-mcp.git"
-  },
-  "bugs": {
-    "url": "https://github.com/your-org/magi-archive-mcp/issues"
-  },
-  "homepage": "https://wiki.magi-agi.org"
+  ]
 }
