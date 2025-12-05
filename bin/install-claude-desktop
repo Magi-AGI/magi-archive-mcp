@@ -13,6 +13,7 @@ class ClaudeDesktopInstaller
   def initialize
     @config_path = detect_config_path
     @server_path = File.expand_path("../mcp-server", __FILE__)
+    @gem_root = File.expand_path("../..", @server_path)
   end
 
   def run
@@ -61,7 +62,8 @@ class ClaudeDesktopInstaller
       "command" => "ruby",
       "args" => [@server_path, working_dir],
       "env" => env_vars.merge({
-        "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp"
+        "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp",
+        "BUNDLE_GEMFILE" => File.join(@gem_root, 'Gemfile')
       })
     }
 
