@@ -2,6 +2,7 @@
 
 A Ruby client library and MCP protocol server for the Magi Archive API (`wiki.magi-agi.org`). This package provides both a Ruby library for programmatic access and MCP protocol tools for integration with AI assistants like Claude Desktop, Claude Code, and Codex.
 
+[![npm](https://img.shields.io/npm/v/@magi-agi/mcp-server)](https://www.npmjs.com/package/@magi-agi/mcp-server)
 [![Ruby](https://img.shields.io/badge/Ruby-3.2%2B-red)](https://www.ruby-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-102%20passing-brightgreen)](spec/)
@@ -49,7 +50,7 @@ Want to use Magi Archive directly in Claude Desktop, Claude Code, Codex, or Chat
 
 **For ChatGPT Desktop (via npm):**
 ```bash
-npm install -g @magi-archive/mcp-server
+npm install -g @magi-agi/mcp-server
 # Set MCP_USERNAME and MCP_PASSWORD in environment
 # Restart ChatGPT Desktop - server auto-discovered!
 ```
@@ -95,7 +96,7 @@ bundle exec rake install
 ChatGPT Desktop uses npm packages for MCP server discovery. Install globally:
 
 ```bash
-npm install -g @magi-archive/mcp-server
+npm install -g @magi-agi/mcp-server
 ```
 
 **Prerequisites:**
