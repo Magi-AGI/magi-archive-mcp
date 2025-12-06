@@ -62,8 +62,26 @@ class CodexInstaller
     puts "📦 Registering MCP server with Codex CLI..."
     puts ""
 
-    # Remove existing server if it exists
-    system("codex mcp remove magi-archive > /dev/null 2>&1")
+    # Check if server already exists
+    output = `codex mcp list 2>&1`
+    if output.include?("magi-archive")
+      puts "⚠️  Existing Magi Archive server found"
+      puts ""
+      print "Remove and reinstall? (Y/n): "
+      response = gets.chomp.downcase
+      unless response.empty? || response == "y" || response == "yes"
+        puts "❌ Installation cancelled"
+        exit 0
+      end
+
+      print "Removing existing server... "
+      if system("codex mcp remove magi-archive 2>&1")
+        puts "✓"
+      else
+        puts "failed (may need manual removal)"
+      end
+      puts ""
+    end
 
     # Build env flags
     env_flags = []
