@@ -60,6 +60,20 @@ class ClaudeCodeInstaller
 
     # Add Magi Archive server config
     config["mcpServers"] ||= {}
+
+    # Check if already installed
+    if config["mcpServers"]["magi-archive"]
+      puts "⚠️  Existing Magi Archive configuration found"
+      print "Overwrite existing configuration? (Y/n): "
+      response = gets.chomp.downcase
+      unless response.empty? || response == "y" || response == "yes"
+        puts "❌ Installation cancelled"
+        exit 0
+      end
+      puts "♻️  Overwriting existing configuration..."
+      puts ""
+    end
+
     config["mcpServers"]["magi-archive"] = {
       "command" => "bundle",
       "args" => ["exec", "ruby", @server_path, working_dir],

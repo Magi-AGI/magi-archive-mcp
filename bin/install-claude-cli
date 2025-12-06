@@ -63,10 +63,25 @@ class ClaudeCliInstaller
     puts "📦 Registering MCP server with Claude Code CLI..."
     puts ""
 
-    # Remove existing server if it exists (try all scopes)
-    system("claude mcp remove --scope user magi-archive > /dev/null 2>&1")
-    system("claude mcp remove --scope local magi-archive > /dev/null 2>&1")
-    system("claude mcp remove --scope project magi-archive > /dev/null 2>&1")
+    # Check if server already exists
+    output = `claude mcp list 2>&1`
+    if output.include?("magi-archive")
+      puts "⚠️  Existing Magi Archive server found"
+      puts ""
+      puts "Removing from all scopes..."
+
+      # Remove existing server if it exists (try all scopes)
+      scopes = ["user", "local", "project"]
+      scopes.each do |scope|
+        print "  Removing from #{scope} scope... "
+        if system("claude mcp remove --scope #{scope} magi-archive 2>&1")
+          puts "✓"
+        else
+          puts "not found"
+        end
+      end
+      puts ""
+    end
 
     # Build env flags
     env_flags = []
