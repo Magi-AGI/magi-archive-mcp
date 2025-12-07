@@ -101,6 +101,50 @@ module Magi
           request(:delete, path)
         end
 
+        # Health check - check if wiki is operational
+        #
+        # This is a lightweight endpoint that doesn't require authentication.
+        # Checks database connectivity and basic card access.
+        #
+        # @return [Hash] health status with timestamp and component checks
+        # @raise [APIError] if wiki is unreachable
+        #
+        # @example
+        #   client.health_check
+        #   # => { "status" => "healthy", "timestamp" => "2025-12-07T...", "checks" => {...} }
+        def health_check
+          url = config.url_for("/health")
+          response = HTTP.get(url)
+
+          unless response.status.success?
+            raise APIError.new("Health check failed", status: response.code)
+          end
+
+          JSON.parse(response.body.to_s)
+        end
+
+        # Ping - ultra-lightweight check
+        #
+        # Even faster than health_check - just verifies the server responds.
+        # Doesn't check database or card access.
+        #
+        # @return [Hash] ping response with timestamp
+        # @raise [APIError] if server doesn't respond
+        #
+        # @example
+        #   client.ping
+        #   # => { "status" => "ok", "timestamp" => "2025-12-07T..." }
+        def ping
+          url = config.url_for("/health/ping")
+          response = HTTP.get(url)
+
+          unless response.status.success?
+            raise APIError.new("Ping failed", status: response.code)
+          end
+
+          JSON.parse(response.body.to_s)
+        end
+
         # GET request returning raw HTTP response (for file downloads)
         #
         # @param path [String] the endpoint path

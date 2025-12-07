@@ -22,6 +22,7 @@ require_relative "../lib/magi/archive/mcp/server/tools/list_children"
 # Tag operations
 require_relative "../lib/magi/archive/mcp/server/tools/get_tags"
 require_relative "../lib/magi/archive/mcp/server/tools/search_by_tags"
+require_relative "../lib/magi/archive/mcp/server/tools/suggest_tags"
 
 # Relationships
 require_relative "../lib/magi/archive/mcp/server/tools/get_relationships"
@@ -39,6 +40,9 @@ require_relative "../lib/magi/archive/mcp/server/tools/admin_backup"
 
 # Weekly summaries
 require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
+
+# Health check
+require_relative "../lib/magi/archive/mcp/server/tools/health_check"
 
 # Initialize the Magi Archive tools
 # This creates an authenticated client using environment variables:
@@ -82,6 +86,7 @@ server = ::MCP::Server.new(
     # Tag operations
     Magi::Archive::Mcp::Server::Tools::GetTags,
     Magi::Archive::Mcp::Server::Tools::SearchByTags,
+    Magi::Archive::Mcp::Server::Tools::SuggestTags,
 
     # Relationships
     Magi::Archive::Mcp::Server::Tools::GetRelationships,
@@ -98,7 +103,10 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::AdminBackup,
 
     # Weekly summaries
-    Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary
+    Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
+
+    # Health check
+    Magi::Archive::Mcp::Server::Tools::HealthCheck
   ],
   server_context: server_context
 )
