@@ -50,7 +50,7 @@ module Magi
                 return error_response("Either card_name or content must be provided") unless content
 
                 # Extract keywords and suggest tags
-                suggestions = analyze_content_for_tags(content, card_name, type, limit)
+                suggestions = analyze_content_for_tags(content, card_name, type, limit, tools)
 
                 # Get existing tags for comparison if card_name provided
                 existing_tags = card_name ? tools.get_card_tags(card_name) : []
@@ -80,9 +80,71 @@ module Magi
                 }], is_error: true)
               end
 
-              def analyze_content_for_tags(content, name, type, limit)
+              def analyze_content_for_tags(content, name, type, limit, tools)
                 suggestions = []
 
+                # Get all existing tags from the wiki for matching
+                begin
+                  all_tags = tools.get_all_tags(limit: 500)
+                  existing_tag_names = all_tags.map { |t| t["name"] || t }.uniq
+                rescue StandardError => e
+                  # If we can't get tags, fall back to keyword extraction
+                  $stderr.puts "Warning: Could not fetch existing tags: #{e.message}"
+                  existing_tag_names = []
+                end
+
+                # Extract keywords from content
+                keywords = extract_keywords(content)
+
+                # Match keywords against existing tags (case-insensitive)
+                matched_tags = []
+                keywords.each do |keyword|
+                  matching = existing_tag_names.find { |tag| tag.downcase.include?(keyword.downcase) || keyword.downcase.include?(tag.downcase) }
+                  matched_tags << matching if matching
+                end
+
+                suggestions.concat(matched_tags.compact.uniq)
+
+                # Add hierarchy-based tags from name
+                if name && name.include?("+")
+                  parts = name.split("+")
+                  # Check if parent card name matches existing tags
+                  parts.each do |part|
+                    matching = existing_tag_names.find { |tag| tag.downcase == part.downcase }
+                    suggestions << matching if matching
+                  end
+                end
+
+                # Type-specific tag suggestions (only from existing tags)
+                if type && existing_tag_names.any?
+                  type_keywords = case type.downcase
+                                  when "species" then ["biology", "xenobiology", "alien", "species"]
+                                  when "faction" then ["politics", "organization", "military", "faction"]
+                                  when "technology", "tech" then ["technology", "science", "engineering", "tech"]
+                                  when "gm", "gamemaster" then ["gm", "secret", "plot"]
+                                  else []
+                                  end
+
+                  type_keywords.each do |keyword|
+                    matching = existing_tag_names.find { |tag| tag.downcase.include?(keyword) }
+                    suggestions << matching if matching
+                  end
+                end
+
+                # If we still don't have enough suggestions, add high-frequency keywords
+                # but only if they match existing tags
+                if suggestions.size < limit
+                  remaining = limit - suggestions.size
+                  keyword_matches = keywords.map { |kw|
+                    existing_tag_names.find { |tag| tag.downcase == kw.downcase }
+                  }.compact
+                  suggestions.concat(keyword_matches.first(remaining))
+                end
+
+                suggestions.uniq.first(limit)
+              end
+
+              def extract_keywords(content)
                 # Extract capitalized words and phrases (likely proper nouns/concepts)
                 words = content.to_s.scan(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/)
                                     .map(&:strip)
@@ -91,36 +153,7 @@ module Magi
 
                 # Score words by frequency
                 word_freq = words.group_by(&:itself).transform_values(&:count)
-                sorted_words = word_freq.sort_by { |_, count| -count }.map(&:first)
-
-                # Add frequent words as tag suggestions
-                suggestions.concat(sorted_words.first(limit))
-
-                # Type-based suggestions
-                if type
-                  case type.downcase
-                  when "species"
-                    suggestions << "Biology" << "Xenobiology" << "Alien"
-                  when "faction"
-                    suggestions << "Politics" << "Organization" << "Military"
-                  when "technology", "tech"
-                    suggestions << "Technology" << "Science" << "Engineering"
-                  when "gm", "gamemaster"
-                    suggestions << "GM" << "Secret" << "Plot"
-                  end
-                end
-
-                # Name-based suggestions
-                if name
-                  # Extract hierarchy from compound card names
-                  if name.include?("+")
-                    parts = name.split("+")
-                    # First part is often a category
-                    suggestions << parts.first if parts.first
-                  end
-                end
-
-                suggestions.uniq.first(limit)
+                word_freq.sort_by { |_, count| -count }.map(&:first)
               end
 
               def format_suggestions(suggestions, existing_tags, card_name)
