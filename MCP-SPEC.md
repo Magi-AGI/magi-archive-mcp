@@ -141,6 +141,8 @@
   - render/markdown; cards/batch with children; run_query (limited filters).
 - Phase 3:
   - ✅ **Content search**: Enhance `search_cards` to search card content (not just names). Server-side: add `search_in` parameter (`name`, `content`, `both`); optional full-text indexing. Client-side: expose parameter in MCP tool with clear documentation of performance implications. **IMPLEMENTED**
+  - ✅ **Health check endpoint**: Lightweight monitoring endpoints (`/health` and `/health/ping`) for checking wiki availability without authentication. **IMPLEMENTED**
+  - ✅ **Tag suggestions tool**: AI-assisted tag suggestions based on content analysis and existing wiki tags. Promotes tag consistency and discovery. **IMPLEMENTED**
   - Regex patch mode with guardrails/dry-run.
   - jobs/spoiler-scan and other server-side jobs.
   - Advanced named queries; optional backups/export endpoint.
@@ -275,6 +277,84 @@ tools.search_cards(q: "neural lace", search_in: "content")
 
 # Search both names and content
 tools.search_cards(q: "technology", search_in: "both")
+```
+
+###Health Check Endpoints
+**Status**: ✅ **IMPLEMENTED** (Phase 3)
+
+**Problem**: No way to monitor wiki availability or detect outages without making authenticated requests.
+
+**Proposed Solution**:
+- **Server-side (Decko API)**:
+  - Add `GET /api/mcp/health` endpoint (full health check)
+  - Add `GET /api/mcp/health/ping` endpoint (minimal check)
+  - No authentication required for monitoring purposes
+  - Check database connectivity and basic card access
+  - Return structured health status with component checks
+
+- **Client-side (MCP Server)**:
+  - Add `health_check()` and `ping()` methods to Client class
+  - Create health_check MCP tool for proactive monitoring
+  - Support detailed vs quick health checks
+
+**Implementation** (Completed Dec 2025):
+- **Server**: magi-archive commit 29a3d59
+  - Created HealthController with index and ping actions
+  - Routes: GET /api/mcp/health and /api/mcp/health/ping
+  - No authentication required
+  - Returns status, timestamp, version, and component checks
+
+- **Client**: magi-archive-mcp commit 18dcc52
+  - Added health_check() and ping() to Client class
+  - Created HealthCheck MCP tool
+  - Supports detailed (full check) and quick (ping) modes
+
+**Usage Example**:
+```ruby
+# Full health check
+client.health_check
+# => { "status" => "healthy", "timestamp" => "...", "checks" => {...} }
+
+# Quick ping
+client.ping
+# => { "status" => "ok", "timestamp" => "..." }
+```
+
+### Tag Suggestions
+**Status**: ✅ **IMPLEMENTED** (Phase 3)
+
+**Problem**: Manual tag selection is tedious and leads to inconsistent tagging across the wiki.
+
+**Proposed Solution**:
+- Analyze card content, name, and type to suggest relevant tags
+- Match keywords against existing wiki tags (not hard-coded)
+- Promote tag reuse and consistency
+- Show existing tags vs new suggestions
+
+**Implementation** (Completed Dec 2025):
+- **Client**: magi-archive-mcp commits 18dcc52, 361e434, ddc72da
+  - Created SuggestTags MCP tool
+  - Fetches all existing tags from wiki (up to 500)
+  - Extracts keywords from content
+  - Matches keywords to existing tags (fuzzy matching)
+  - Considers card name hierarchy and type
+  - Returns only tags that exist in the wiki
+
+**Algorithm**:
+1. Extract capitalized words from content (keywords)
+2. Fetch all existing tags from wiki via get_all_tags
+3. Fuzzy match keywords to existing tag names
+4. Match card name parts (from + hierarchy) to existing tags
+5. Match card type to existing tags
+6. Return top N matched tags
+
+**Usage Example**:
+```ruby
+# Suggest tags for existing card
+suggest_tags(card_name: "Games+Butterfly Galaxii+Tech")
+
+# Suggest tags for new content
+suggest_tags(content: "<p>Advanced neural interface technology...</p>", type: "Technology")
 ```
 
 ## Security & Auditing
