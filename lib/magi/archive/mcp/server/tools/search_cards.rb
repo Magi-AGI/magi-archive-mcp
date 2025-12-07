@@ -12,17 +12,23 @@ module Magi
           class SearchCards < ::MCP::Tool
             # Alias Client for cleaner error handling
             Client = Magi::Archive::Mcp::Client
-            description "Search for cards in the Magi Archive wiki by query, type, or other filters. NOTE: The 'query' parameter searches CARD NAMES ONLY (substring match), not content. For content search, use more specific queries or filters."
+            description "Search for cards in the Magi Archive wiki by query, type, or other filters. Supports searching in card names, content, or both."
 
             input_schema(
               properties: {
                 query: {
                   type: "string",
-                  description: "Search query - searches in CARD NAMES only (substring match, case-insensitive). Does NOT search card content. Example: 'Butterfly' finds 'Games+Butterfly Galaxii', 'Tech' finds 'Player+Tech', etc."
+                  description: "Search query (substring match, case-insensitive). Example: 'Butterfly' finds 'Games+Butterfly Galaxii', 'neural lace' finds cards containing that term."
                 },
                 type: {
                   type: "string",
                   description: "Filter by card type (e.g., 'Article', 'Basic', 'Species')"
+                },
+                search_in: {
+                  type: "string",
+                  description: "Where to search: 'name' (default, fastest - searches card names only), 'content' (slower - searches card content only), or 'both' (comprehensive - searches both names and content)",
+                  enum: ["name", "content", "both"],
+                  default: "name"
                 },
                 limit: {
                   type: "integer",
@@ -42,15 +48,16 @@ module Magi
             )
 
             class << self
-              def call(query: nil, type: nil, limit: 50, offset: 0, server_context:)
+              def call(query: nil, type: nil, search_in: nil, limit: 50, offset: 0, server_context:)
                 tools = server_context[:magi_tools]
 
                 params = { limit: limit, offset: offset }
                 params[:q] = query if query
                 params[:type] = type if type
+                params[:search_in] = search_in if search_in
 
                 # Log search parameters for debugging
-                $stderr.puts "search_cards: q=#{query.inspect}, type=#{type.inspect}, limit=#{limit}, offset=#{offset}"
+                $stderr.puts "search_cards: q=#{query.inspect}, type=#{type.inspect}, search_in=#{search_in.inspect}, limit=#{limit}, offset=#{offset}"
 
                 results = tools.search_cards(**params)
 

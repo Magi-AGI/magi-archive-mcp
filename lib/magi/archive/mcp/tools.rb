@@ -55,20 +55,23 @@ module Magi
         # Search cards by query string, optionally filtered by type.
         # Returns paginated results.
         #
-        # IMPORTANT: The 'q' parameter performs substring search on CARD NAMES ONLY,
-        # not card content. For content-based search, use get_card to retrieve cards
-        # and search content locally, or use type filters to narrow results.
-        #
-        # @param q [String, nil] search query (searches card NAMES only, case-insensitive substring match)
+        # @param q [String, nil] search query (substring match, case-insensitive)
         # @param type [String, nil] filter by card type (e.g., "User", "Role")
+        # @param search_in [String, nil] where to search: "name" (default), "content", or "both"
         # @param limit [Integer] results per page (default: 50, max: 100)
         # @param offset [Integer] starting offset (default: 0)
         # @return [Hash] with keys: cards (array), total, limit, offset, next_offset
         # @raise [Client::ValidationError] if parameters are invalid
         #
-        # @example Simple search - finds cards with "game" in their name
+        # @example Search card names only (default, fastest)
         #   results = tools.search_cards(q: "game")
         #   results["cards"].each { |card| puts card["name"] }
+        #
+        # @example Search card content (slower, more comprehensive)
+        #   results = tools.search_cards(q: "neural lace", search_in: "content")
+        #
+        # @example Search both names and content
+        #   results = tools.search_cards(q: "species", search_in: "both")
         #
         # @example Search with type filter
         #   users = tools.search_cards(type: "User", limit: 20)
@@ -76,10 +79,11 @@ module Magi
         # @example Paginated search
         #   page1 = tools.search_cards(q: "plan", limit: 10, offset: 0)
         #   page2 = tools.search_cards(q: "plan", limit: 10, offset: 10)
-        def search_cards(q: nil, type: nil, limit: 50, offset: 0)
+        def search_cards(q: nil, type: nil, search_in: nil, limit: 50, offset: 0)
           params = { limit: limit, offset: offset }
           params[:q] = q if q
           params[:type] = type if type
+          params[:search_in] = search_in if search_in
 
           client.get("/cards", **params)
         end
