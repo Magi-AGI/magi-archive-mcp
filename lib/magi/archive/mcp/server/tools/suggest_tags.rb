@@ -115,24 +115,13 @@ module Magi
                   end
                 end
 
-                # Type-specific tag suggestions (only from existing tags)
-                if type && existing_tag_names.any?
-                  type_keywords = case type.downcase
-                                  when "species" then ["biology", "xenobiology", "alien", "species"]
-                                  when "faction" then ["politics", "organization", "military", "faction"]
-                                  when "technology", "tech" then ["technology", "science", "engineering", "tech"]
-                                  when "gm", "gamemaster" then ["gm", "secret", "plot"]
-                                  else []
-                                  end
-
-                  type_keywords.each do |keyword|
-                    matching = existing_tag_names.find { |tag| tag.downcase.include?(keyword) }
-                    suggestions << matching if matching
-                  end
+                # Add the card type name itself if it exists as a tag
+                if type
+                  type_match = existing_tag_names.find { |tag| tag.downcase == type.downcase }
+                  suggestions << type_match if type_match
                 end
 
-                # If we still don't have enough suggestions, add high-frequency keywords
-                # but only if they match existing tags
+                # If we still don't have enough suggestions, try exact keyword matches
                 if suggestions.size < limit
                   remaining = limit - suggestions.size
                   keyword_matches = keywords.map { |kw|
@@ -141,6 +130,7 @@ module Magi
                   suggestions.concat(keyword_matches.first(remaining))
                 end
 
+                # Return unique suggestions up to limit
                 suggestions.uniq.first(limit)
               end
 
