@@ -140,10 +140,10 @@
   - Batch: children support, `fetch_or_initialize`, and safe `replace_between` helper; named query templates.
   - render/markdown; cards/batch with children; run_query (limited filters).
 - Phase 3:
+  - ✅ **Content search**: Enhance `search_cards` to search card content (not just names). Server-side: add `search_in` parameter (`name`, `content`, `both`); optional full-text indexing. Client-side: expose parameter in MCP tool with clear documentation of performance implications. **IMPLEMENTED**
   - Regex patch mode with guardrails/dry-run.
   - jobs/spoiler-scan and other server-side jobs.
   - Advanced named queries; optional backups/export endpoint.
-  - **Content search**: Enhance `search_cards` to search card content (not just names). Server-side: add `search_in` parameter (`name`, `content`, `both`); optional full-text indexing. Client-side: expose parameter in MCP tool with clear documentation of performance implications.
 
 ## cards/batch Examples
 - Simple bulk create:
@@ -224,7 +224,7 @@
 ## Future Enhancements (Phase 3+)
 
 ### Content Search
-**Status**: Planned for Phase 3
+**Status**: ✅ **IMPLEMENTED** (Phase 3)
 
 **Problem**: Current `search_cards` only searches card names (substring match), not content. This limits discoverability when users search for keywords that appear in card content but not in names.
 
@@ -253,6 +253,29 @@
 **Dependencies**: None (server-side change with client update)
 
 **Estimated Effort**: Medium (2-3 days server + 1 day client)
+
+**Implementation** (Completed Dec 2025):
+- **Client**: magi-archive-mcp commit f79393d
+  - Added `search_in` parameter to `Tools.search_cards` method
+  - Exposed parameter in MCP `search_cards` tool with enum validation
+  - Defaults to "name" for backward compatibility
+
+- **Server**: magi-archive commit 0991d80
+  - Modified `build_search_query` in `cards_controller.rb`
+  - Supports `query[:content]` and `query[:or]` for Decko search
+  - Role-based filtering maintained for all search modes
+
+**Usage Example**:
+```ruby
+# Search card names only (default, fastest)
+tools.search_cards(q: "species")
+
+# Search card content only
+tools.search_cards(q: "neural lace", search_in: "content")
+
+# Search both names and content
+tools.search_cards(q: "technology", search_in: "both")
+```
 
 ## Security & Auditing
 - HTTPS only; lock API to known IPs/SGs if possible.
