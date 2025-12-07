@@ -31,7 +31,7 @@
 ## API Surface (Decko side)
 - `POST /api/mcp/auth` → returns short-lived RS256 JWT scoped to role and key. (MVP note: could ship with Rails signed bearer tokens first, then upgrade to JWT; keep claims/rotation plan ready.)
 - `GET /api/mcp/cards/:name` → fetch card metadata/content with role-based filters.
-- `GET /api/mcp/cards` → list/search with query params: `q` (name contains), `type`, `updated_since`, `limit/offset`.
+- `GET /api/mcp/cards` → list/search with query params: `q` (name contains), `type`, `updated_since`, `limit/offset`. Phase 3: add `search_in` param (`name`|`content`|`both`) for content search.
 - `POST /api/mcp/cards` → create; body: `name`, `type`, `content` (raw HTML) or `markdown_content` (server-converted), optional `fields`.
 - `PATCH /api/mcp/cards/:name` → update content/fields; accepts `content` or `markdown_content`.
 - `DELETE /api/mcp/cards/:name` → admin only.
@@ -143,6 +143,7 @@
   - Regex patch mode with guardrails/dry-run.
   - jobs/spoiler-scan and other server-side jobs.
   - Advanced named queries; optional backups/export endpoint.
+  - **Content search**: Enhance `search_cards` to search card content (not just names). Server-side: add `search_in` parameter (`name`, `content`, `both`); optional full-text indexing. Client-side: expose parameter in MCP tool with clear documentation of performance implications.
 
 ## cards/batch Examples
 - Simple bulk create:
@@ -219,6 +220,39 @@
 - Bulk delete: add admin-only batch delete?
 - Card revision history: expose Decko versions via API?
 - Recursive children listing: keep flat for MVP; add recursive option later if needed.
+
+## Future Enhancements (Phase 3+)
+
+### Content Search
+**Status**: Planned for Phase 3
+
+**Problem**: Current `search_cards` only searches card names (substring match), not content. This limits discoverability when users search for keywords that appear in card content but not in names.
+
+**Proposed Solution**:
+- **Server-side (Decko API)**:
+  - Add `search_in` parameter to `GET /api/mcp/cards`: accepts `name` (default), `content`, or `both`
+  - Implement content search using SQL `LIKE` or full-text indexing (PostgreSQL `tsvector`/`tsquery` for better performance)
+  - Consider performance implications: content search may be slower, especially without indexing
+  - Add optional `match_mode` parameter: `substring` (default), `whole_word`, `phrase`
+  - Maintain role-based filtering (GM-only content not searchable by user role)
+
+- **Client-side (MCP Server)**:
+  - Expose `search_in` parameter in `search_cards` tool
+  - Update tool description to clearly explain:
+    - Default behavior (name-only search, fast)
+    - Content search option (may be slower, more results)
+    - Performance implications for large wikis
+  - Add example usage in tool documentation
+
+**Implementation Notes**:
+- Consider adding `highlight` option to return matching snippets
+- May need pagination adjustments (content search could return many more results)
+- Security: ensure HTML tags in content don't cause issues with search queries
+- Performance: consider caching or rate-limiting content searches
+
+**Dependencies**: None (server-side change with client update)
+
+**Estimated Effort**: Medium (2-3 days server + 1 day client)
 
 ## Security & Auditing
 - HTTPS only; lock API to known IPs/SGs if possible.
