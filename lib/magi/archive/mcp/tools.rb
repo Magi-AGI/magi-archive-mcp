@@ -55,14 +55,18 @@ module Magi
         # Search cards by query string, optionally filtered by type.
         # Returns paginated results.
         #
-        # @param q [String, nil] search query (searches name and content)
+        # IMPORTANT: The 'q' parameter performs substring search on CARD NAMES ONLY,
+        # not card content. For content-based search, use get_card to retrieve cards
+        # and search content locally, or use type filters to narrow results.
+        #
+        # @param q [String, nil] search query (searches card NAMES only, case-insensitive substring match)
         # @param type [String, nil] filter by card type (e.g., "User", "Role")
         # @param limit [Integer] results per page (default: 50, max: 100)
         # @param offset [Integer] starting offset (default: 0)
         # @return [Hash] with keys: cards (array), total, limit, offset, next_offset
         # @raise [Client::ValidationError] if parameters are invalid
         #
-        # @example Simple search
+        # @example Simple search - finds cards with "game" in their name
         #   results = tools.search_cards(q: "game")
         #   results["cards"].each { |card| puts card["name"] }
         #

@@ -12,13 +12,13 @@ module Magi
           class SearchCards < ::MCP::Tool
             # Alias Client for cleaner error handling
             Client = Magi::Archive::Mcp::Client
-            description "Search for cards in the Magi Archive wiki by query, type, or other filters"
+            description "Search for cards in the Magi Archive wiki by query, type, or other filters. NOTE: The 'query' parameter searches CARD NAMES ONLY (substring match), not content. For content search, use more specific queries or filters."
 
             input_schema(
               properties: {
                 query: {
                   type: "string",
-                  description: "Search query (searches in card names)"
+                  description: "Search query - searches in CARD NAMES only (substring match, case-insensitive). Does NOT search card content. Example: 'Butterfly' finds 'Games+Butterfly Galaxii', 'Tech' finds 'Player+Tech', etc."
                 },
                 type: {
                   type: "string",
@@ -49,7 +49,15 @@ module Magi
                 params[:q] = query if query
                 params[:type] = type if type
 
+                # Log search parameters for debugging
+                $stderr.puts "search_cards: q=#{query.inspect}, type=#{type.inspect}, limit=#{limit}, offset=#{offset}"
+
                 results = tools.search_cards(**params)
+
+                # Log result count
+                total = results["total"] || 0
+                returned = (results["cards"] || []).size
+                $stderr.puts "search_cards results: returned #{returned} of #{total} total"
 
                 ::MCP::Tool::Response.new([{
                   type: "text",

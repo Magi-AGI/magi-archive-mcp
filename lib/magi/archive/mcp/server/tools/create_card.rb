@@ -62,6 +62,10 @@ module Magi
                   text: ErrorFormatter.authentication_error(e.message)
                 }], is_error: true)
               rescue StandardError => e
+                # Log to stderr for debugging
+                $stderr.puts "ERROR in create_card: #{e.class}: #{e.message}"
+                $stderr.puts e.backtrace.first(5).join("\n")
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("creating card '#{name}'", e)
