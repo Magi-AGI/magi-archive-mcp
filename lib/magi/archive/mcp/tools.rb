@@ -1163,7 +1163,7 @@ module Magi
 
         # Get date string for card name
         date_str = date || Time.now.strftime("%Y %m %d")
-        card_name = "Weekly Work Summary #{date_str}+#{username}"
+        card_name = "Weekly Work Summary #{date_str} - #{username}"
 
         # Fetch recent changes
         card_changes = get_recent_changes(days: days)

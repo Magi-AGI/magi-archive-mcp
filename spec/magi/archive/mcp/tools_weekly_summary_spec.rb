@@ -360,16 +360,19 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "supports custom date" do
+      # Username will default to ENV["USER"] or ENV["USERNAME"]
+      username = ENV["USER"] || ENV["USERNAME"] || "Unknown User"
+
       stub_request(:post, "#{base_url}/cards")
-        .with(body: hash_including("name" => "Weekly Work Summary 2025 12 09"))
+        .with(body: hash_including("name" => /Weekly Work Summary 2025 12 09 - /))
         .to_return(
           status: 201,
-          body: { name: "Weekly Work Summary 2025 12 09", id: 999, type: "Basic" }.to_json
+          body: { name: "Weekly Work Summary 2025 12 09 - #{username}", id: 999, type: "Basic" }.to_json
         )
 
       result = tools.create_weekly_summary(date: "2025 12 09")
 
-      expect(result["name"]).to eq("Weekly Work Summary 2025 12 09")
+      expect(result["name"]).to eq("Weekly Work Summary 2025 12 09 - #{username}")
     end
 
     it "supports custom executive summary" do
