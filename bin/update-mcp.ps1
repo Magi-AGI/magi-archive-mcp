@@ -19,7 +19,7 @@ function Write-ColorOutput($ForegroundColor) {
     $host.UI.RawUI.ForegroundColor = $fc
 }
 
-Write-ColorOutput Cyan "🔄 Magi Archive MCP Server - Quick Update Utility"
+Write-ColorOutput Cyan "[*] Magi Archive MCP Server - Quick Update Utility"
 Write-Output ""
 
 # Get script directory and project root
@@ -29,19 +29,19 @@ $EnvFile = Join-Path $ProjectRoot ".env"
 
 # Check if .env exists
 if (Test-Path $EnvFile) {
-    Write-ColorOutput Green "✓ Found existing .env file with credentials"
+    Write-ColorOutput Green "[+] Found existing .env file with credentials"
 
     # Load .env file
     Get-Content $EnvFile | ForEach-Object {
         $line = $_
-        if ($line -match '^\s*(\w+)\s*=\s*(.*)$') {
+        if ($line -match '^(\w+)=(.*)$') {
             $name = $matches[1].Trim()
             $value = $matches[2].Trim()
             [Environment]::SetEnvironmentVariable($name, $value, 'Process')
         }
     }
 } else {
-    Write-ColorOutput Yellow "⚠  No .env file found. Let's set up your credentials."
+    Write-ColorOutput Yellow "[!] No .env file found. Setting up credentials..."
     Write-Output ""
 
     # Prompt for credentials
@@ -73,13 +73,13 @@ WORKING_DIR=$workingDir
     $env:DECKO_API_BASE_URL = "https://wiki.magi-agi.org/api/mcp"
     $env:WORKING_DIR = $workingDir
 
-    Write-ColorOutput Green "✓ Saved credentials to .env"
+    Write-ColorOutput Green "[+] Saved credentials to .env"
     Write-Output ""
 }
 
 # Verify credentials
 if ([string]::IsNullOrWhiteSpace($env:MCP_USERNAME) -or [string]::IsNullOrWhiteSpace($env:MCP_PASSWORD)) {
-    Write-ColorOutput Red "✗ Error: Missing credentials in .env file"
+    Write-ColorOutput Red "[!] Error: Missing credentials in .env file"
     Write-Output "Please check $EnvFile and ensure MCP_USERNAME and MCP_PASSWORD are set"
     exit 1
 }
@@ -98,23 +98,23 @@ $ClaudeAvailable = $false
 
 if (Get-Command codex -ErrorAction SilentlyContinue) {
     $CodexAvailable = $true
-    Write-ColorOutput Green "✓ Codex CLI detected"
+    Write-ColorOutput Green "[+] Codex CLI detected"
 }
 
 if (Get-Command claude -ErrorAction SilentlyContinue) {
     $ClaudeAvailable = $true
-    Write-ColorOutput Green "✓ Claude CLI detected"
+    Write-ColorOutput Green "[+] Claude CLI detected"
 }
 
 # Check for Claude Desktop config
 $ClaudeDesktopConfig = Join-Path $env:APPDATA "Claude\claude_desktop_config.json"
 if (Test-Path $ClaudeDesktopConfig) {
     $ClaudeAvailable = $true
-    Write-ColorOutput Green "✓ Claude Desktop config detected"
+    Write-ColorOutput Green "[+] Claude Desktop config detected"
 }
 
 if (-not $CodexAvailable -and -not $ClaudeAvailable) {
-    Write-ColorOutput Red "✗ Error: No MCP clients detected (Codex or Claude)"
+    Write-ColorOutput Red "[!] Error: No MCP clients detected (Codex or Claude)"
     Write-Output "Please install at least one MCP client first"
     exit 1
 }
@@ -124,21 +124,21 @@ Write-Output ""
 # Function to update Codex
 function Update-Codex {
     if (-not $script:CodexAvailable) {
-        Write-ColorOutput Yellow "⊘  Skipping Codex (not installed)"
+        Write-ColorOutput Yellow "[-] Skipping Codex (not installed)"
         return
     }
 
-    Write-ColorOutput Cyan "━━━ Updating Codex CLI ━━━"
+    Write-ColorOutput Cyan "--- Updating Codex CLI ---"
 
     # Check if already installed
     $existing = codex mcp list 2>&1 | Select-String "magi-archive"
     if ($existing) {
-        Write-ColorOutput Yellow "⚠  Removing existing magi-archive server..."
+        Write-ColorOutput Yellow "[!] Removing existing magi-archive server..."
         codex mcp remove magi-archive 2>&1 | Out-Null
     }
 
     # Install with credentials
-    Write-ColorOutput Green "✓ Installing magi-archive server..."
+    Write-ColorOutput Green "[+] Installing magi-archive server..."
 
     $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
     $gemfile = Join-Path $ProjectRoot "Gemfile"
@@ -150,29 +150,29 @@ function Update-Codex {
         --env "BUNDLE_GEMFILE=$gemfile" `
         -- bundle exec ruby $serverPath $env:WORKING_DIR
 
-    Write-ColorOutput Green "✓ Codex CLI updated successfully"
+    Write-ColorOutput Green "[+] Codex CLI updated successfully"
     Write-Output ""
 }
 
 # Function to update Claude
 function Update-Claude {
     if (-not $script:ClaudeAvailable) {
-        Write-ColorOutput Yellow "⊘  Skipping Claude (not installed)"
+        Write-ColorOutput Yellow "[-] Skipping Claude (not installed)"
         return
     }
 
-    Write-ColorOutput Cyan "━━━ Updating Claude CLI/Desktop ━━━"
+    Write-ColorOutput Cyan "--- Updating Claude CLI/Desktop ---"
 
     # Check if claude command exists
     if (Get-Command claude -ErrorAction SilentlyContinue) {
         # Use Claude CLI
         $existing = claude mcp list 2>&1 | Select-String "magi-archive"
         if ($existing) {
-            Write-ColorOutput Yellow "⚠  Removing existing magi-archive server..."
+            Write-ColorOutput Yellow "[!] Removing existing magi-archive server..."
             claude mcp remove magi-archive 2>&1 | Out-Null
         }
 
-        Write-ColorOutput Green "✓ Installing magi-archive server..."
+        Write-ColorOutput Green "[+] Installing magi-archive server..."
 
         $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
         $gemfile = Join-Path $ProjectRoot "Gemfile"
@@ -184,13 +184,13 @@ function Update-Claude {
             --env "BUNDLE_GEMFILE=$gemfile" `
             -- bundle exec ruby $serverPath $env:WORKING_DIR
 
-        Write-ColorOutput Green "✓ Claude CLI updated successfully"
+        Write-ColorOutput Green "[+] Claude CLI updated successfully"
     } else {
         # Update Claude Desktop config manually
-        Write-ColorOutput Yellow "⚠  Claude CLI not found, updating config file manually..."
+        Write-ColorOutput Yellow "[!] Claude CLI not found, updating config file manually..."
 
         if (-not (Test-Path $ClaudeDesktopConfig)) {
-            Write-ColorOutput Red "✗ Claude Desktop config not found at: $ClaudeDesktopConfig"
+            Write-ColorOutput Red "[!] Claude Desktop config not found at: $ClaudeDesktopConfig"
             Write-Output "Please ensure Claude Desktop is installed"
             return
         }
@@ -221,8 +221,8 @@ function Update-Claude {
 
         $config | ConvertTo-Json -Depth 10 | Set-Content $ClaudeDesktopConfig
 
-        Write-ColorOutput Green "✓ Claude Desktop config updated"
-        Write-ColorOutput Yellow "⚠  Please restart Claude Desktop to load the updated configuration"
+        Write-ColorOutput Green "[+] Claude Desktop config updated"
+        Write-ColorOutput Yellow "[!] Please restart Claude Desktop to load the updated configuration"
     }
 
     Write-Output ""
@@ -239,8 +239,8 @@ switch ($Target) {
 }
 
 # Final summary
-Write-ColorOutput Green "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-Write-ColorOutput Green "✅ Update Complete!"
+Write-ColorOutput Green "========================================="
+Write-ColorOutput Green "[SUCCESS] Update Complete!"
 Write-Output ""
 Write-Output "Credentials stored in: $EnvFile"
 Write-Output "Working directory: $env:WORKING_DIR"
