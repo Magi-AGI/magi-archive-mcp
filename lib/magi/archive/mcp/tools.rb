@@ -1184,7 +1184,7 @@ module Magi
         card = self.create_card(
           card_name,
           content: content,
-          type: "Basic"
+          type: "Markdown"
         )
 
         # Add to parent hierarchy if specified
