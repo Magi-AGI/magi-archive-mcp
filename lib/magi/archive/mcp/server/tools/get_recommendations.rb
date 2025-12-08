@@ -61,9 +61,10 @@ module Magi
                   text: format_recommendation(operation, result)
                 }])
               rescue Client::NotFoundError => e
+                card_ref = name || type || "unknown"
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: Card not found"
+                  text: ErrorFormatter.not_found("Card", card_ref, operation: "get recommendations for")
                 }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{

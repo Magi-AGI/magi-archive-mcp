@@ -48,7 +48,7 @@ module Magi
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: Card '#{card_name}' not found"
+                  text: ErrorFormatter.not_found("Card", card_name, operation: "get tags for")
                 }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{

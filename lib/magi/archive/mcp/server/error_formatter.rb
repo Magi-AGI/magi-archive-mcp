@@ -11,33 +11,87 @@ module Magi
         # - Why it happened
         # - What to try next
         module ErrorFormatter
-          # Format a NotFoundError with helpful suggestions
+          # Format a NotFoundError with helpful suggestions for compound card names
           #
           # @param resource_type [String] type of resource (e.g., "Card", "Type")
           # @param name [String] the name that wasn't found
+          # @param operation [String] what operation was attempted (e.g., "fetch", "update", "delete")
           # @return [String] formatted error message
-          def self.not_found(resource_type, name)
+          def self.not_found(resource_type, name, operation: "access")
             parts = []
             parts << "❌ **#{resource_type} Not Found**"
             parts << ""
             parts << "**Searched for:** `#{name}`"
             parts << ""
-            parts << "**Possible reasons:**"
-            parts << "- The #{resource_type.downcase} may not exist in the wiki"
-            parts << "- Card names are case-sensitive - check capitalization"
-            parts << "- Spaces vs underscores matter: 'Main Page' ≠ 'Main_Page'"
+            parts << "**Common Causes:**"
+            parts << ""
 
-            if name.include?("+")
-              parts << "- For compound cards, ensure parent exists: '#{name.split('+').first}'"
+            # Detect if this looks like a short name that might be part of a compound card
+            looks_like_short_name = !name.include?("+") && name.split.size <= 3
+
+            if looks_like_short_name
+              parts << "1. **Using short name instead of full path** (MOST COMMON):"
+              parts << "   - If you found this card in search results, you need the FULL card name"
+              parts << "   - ❌ Wrong: `\"#{name}\"`"
+              parts << "   - ✅ Correct: `\"Parent+Path+To+#{name}\"`"
+              parts << "   - Example: `\"Games+Butterfly Galaxii+Player+#{name}\"`"
+              parts << ""
+              parts << "2. **Case sensitivity** - Card names are case-sensitive:"
+              parts << "   - `\"Main Page\"` ≠ `\"main page\"`"
+              parts << ""
+              parts << "3. **Spaces vs underscores** - Use spaces, not underscores:"
+              parts << "   - ❌ Wrong: `\"Main_Page\"`"
+              parts << "   - ✅ Correct: `\"Main Page\"`"
+            elsif name.include?("+")
+              parts << "1. **Incorrect compound card path**:"
+              parts << "   - Verify each part of the path exists"
+              parts << "   - Parent card must exist: `#{name.split('+').first}`"
+              parts << ""
+              parts << "2. **Case sensitivity** - Each part is case-sensitive"
+              parts << ""
+              parts << "3. **Spaces vs underscores** - Use spaces in each part"
             else
-              parts << "- For child cards, use format: 'Parent+Child' (with + sign)"
+              parts << "1. **Card doesn't exist** - The card may not be created yet"
+              parts << ""
+              parts << "2. **Case sensitivity** - Card names are case-sensitive"
+              parts << ""
+              parts << "3. **Spaces vs underscores** - Use spaces, not underscores"
             end
 
             parts << ""
-            parts << "**Try these steps:**"
-            parts << "1. Use `search_cards` to find cards with similar names"
-            parts << "2. Check the wiki directly: https://wiki.magi-agi.org/#{name.gsub(' ', '_')}"
-            parts << "3. List available cards with `search_cards(limit: 20)`"
+            parts << "**How to Fix:**"
+            parts << ""
+            parts << "**Step 1: Search for the exact card name**"
+            parts << "```"
+
+            # Suggest different search strategies based on the name
+            if looks_like_short_name
+              # Search for the short name to find the full path
+              parts << "search_cards(q: \"#{name}\", limit: 20)"
+              parts << "```"
+              parts << "This will show you the FULL card name including parent path."
+              parts << ""
+              parts << "**Step 2: Copy the EXACT name from search results**"
+              parts << "When you see results like:"
+              parts << "- `Games+Butterfly Galaxii+Player+Cultures+#{name}`"
+              parts << ""
+              parts << "Use that ENTIRE name (with all the + signs):"
+              parts << "```"
+              parts << "get_card(\"Games+Butterfly Galaxii+Player+Cultures+#{name}\")"
+            else
+              parts << "search_cards(q: \"#{name.split('+').last}\", limit: 20)"
+              parts << "```"
+              parts << "Look for cards with similar names."
+              parts << ""
+              parts << "**Step 2: Use the exact name from search results**"
+              parts << "```"
+              parts << "get_card(\"<exact name from search>\")"
+            end
+
+            parts << "```"
+            parts << ""
+            parts << "**Important:** When searching returns a card name, you MUST use that complete name"
+            parts << "(including all Parent+ parts) when calling other tools like get_card, update_card, etc."
 
             parts.join("\n")
           end
