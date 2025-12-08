@@ -173,42 +173,25 @@ function Update-Claude {
 
     # Check if claude command exists
     if (Get-Command claude -ErrorAction SilentlyContinue) {
-        # Use Claude CLI
-        $existing = claude mcp list 2>&1 | Select-String "magi-archive"
-        if ($existing) {
-            Write-ColorOutput Yellow "[!] Removing existing magi-archive server from all scopes..."
-            # Try removing from all scopes (user, local, project)
-            @('user', 'local', 'project') | ForEach-Object {
-                claude mcp remove --scope $_ magi-archive 2>&1 | Out-Null
+        # Use Ruby install script instead of direct claude command to avoid interactive mode
+        Write-ColorOutput Yellow "[!] Using Ruby install script for Claude CLI..."
+
+        $installScript = Join-Path $ProjectRoot "bin\install-claude-cli"
+
+        if (Test-Path $installScript) {
+            # Run Ruby install script with input piped
+            # Input: auth method (1=username/password), username, password, working directory
+            $inputData = "1`n$env:MCP_USERNAME`n$env:MCP_PASSWORD`n$env:WORKING_DIR`n"
+            $output = $inputData | ruby $installScript 2>&1
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-ColorOutput Green "[+] Claude CLI updated successfully"
+            } else {
+                Write-ColorOutput Red "[!] Claude CLI update failed (exit code: $LASTEXITCODE)"
+                Write-Output $output
             }
-        }
-
-        Write-ColorOutput Green "[+] Installing magi-archive server..."
-
-        $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
-        $gemfile = Join-Path $ProjectRoot "Gemfile"
-
-        # Use Start-Process to avoid exposing credentials in interactive mode
-        $argumentList = @(
-            'mcp', 'add',
-            '--scope', 'user',
-            '--transport', 'stdio',
-            'magi-archive',
-            '--env', "MCP_USERNAME=$env:MCP_USERNAME",
-            '--env', "MCP_PASSWORD=$env:MCP_PASSWORD",
-            '--env', "DECKO_API_BASE_URL=$env:DECKO_API_BASE_URL",
-            '--env', "BUNDLE_GEMFILE=$gemfile",
-            '--',
-            'bundle', 'exec', 'ruby', $serverPath, $env:WORKING_DIR
-        )
-
-        $process = Start-Process -FilePath "claude" -ArgumentList $argumentList -NoNewWindow -Wait -PassThru
-        $LASTEXITCODE = $process.ExitCode
-
-        if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput Green "[+] Claude CLI updated successfully"
         } else {
-            Write-ColorOutput Red "[!] Claude CLI update failed (exit code: $LASTEXITCODE)"
+            Write-ColorOutput Red "[!] install-claude-cli script not found"
         }
     } else {
         # Update Claude Desktop config manually
