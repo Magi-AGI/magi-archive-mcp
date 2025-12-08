@@ -1358,8 +1358,10 @@ module Magi
         end
 
         # Add the new entry at the top (most recent first)
-        # Format: [[Card Name]] - Date
-        new_entry = "- [[#{card_name}]] - #{date_str}\n"
+        # Format: [[_L+Weekly Work Summary DATE - USER|Weekly Work Summary DATE - USER]]
+        # Extract just the date and username part after the parent card name
+        display_name = card_name.sub(/^Weekly Work Summaries\+/, "Weekly Work Summary ")
+        new_entry = "- [[_L+#{display_name}|#{display_name}]]\n"
 
         # Check if this entry already exists
         return if content.include?(new_entry)
