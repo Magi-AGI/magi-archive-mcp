@@ -154,7 +154,11 @@ function Update-Codex {
         --env "BUNDLE_GEMFILE=$gemfile" `
         -- bundle exec ruby $serverPath $env:WORKING_DIR
 
-    Write-ColorOutput Green "[+] Codex CLI updated successfully"
+    if ($LASTEXITCODE -eq 0) {
+        Write-ColorOutput Green "[+] Codex CLI updated successfully"
+    } else {
+        Write-ColorOutput Red "[!] Codex CLI update failed (exit code: $LASTEXITCODE)"
+    }
     Write-Output ""
 }
 
@@ -172,8 +176,11 @@ function Update-Claude {
         # Use Claude CLI
         $existing = claude mcp list 2>&1 | Select-String "magi-archive"
         if ($existing) {
-            Write-ColorOutput Yellow "[!] Removing existing magi-archive server..."
-            claude mcp remove magi-archive 2>&1 | Out-Null
+            Write-ColorOutput Yellow "[!] Removing existing magi-archive server from all scopes..."
+            # Try removing from all scopes (user, local, project)
+            @('user', 'local', 'project') | ForEach-Object {
+                claude mcp remove --scope $_ magi-archive 2>&1 | Out-Null
+            }
         }
 
         Write-ColorOutput Green "[+] Installing magi-archive server..."
@@ -181,14 +188,21 @@ function Update-Claude {
         $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
         $gemfile = Join-Path $ProjectRoot "Gemfile"
 
-        claude mcp add magi-archive `
+        claude mcp add `
+            --scope user `
+            --transport stdio `
+            magi-archive `
             --env "MCP_USERNAME=$env:MCP_USERNAME" `
             --env "MCP_PASSWORD=$env:MCP_PASSWORD" `
             --env "DECKO_API_BASE_URL=$env:DECKO_API_BASE_URL" `
             --env "BUNDLE_GEMFILE=$gemfile" `
             -- bundle exec ruby $serverPath $env:WORKING_DIR
 
-        Write-ColorOutput Green "[+] Claude CLI updated successfully"
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColorOutput Green "[+] Claude CLI updated successfully"
+        } else {
+            Write-ColorOutput Red "[!] Claude CLI update failed (exit code: $LASTEXITCODE)"
+        }
     } else {
         # Update Claude Desktop config manually
         Write-ColorOutput Yellow "[!] Claude CLI not found, updating config file manually..."
