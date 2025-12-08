@@ -1,0 +1,49 @@
+{
+  "name": "@magi-agi/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Magi Archive wiki - provides AI agents secure access to the Magi Archive knowledge base",
+  "type": "module",
+  "bin": {
+    "magi-archive-mcp": "bin/mcp-server-npm.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/check-ruby.js"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "magi-archive",
+    "decko",
+    "wiki",
+    "ai",
+    "knowledge-base"
+  ],
+  "author": "Magi AGI Project",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/magi-archive-mcp.git"
+  },
+  "mcp": {
+    "server": {
+      "name": "magi-archive",
+      "description": "Access the Magi Archive wiki - search, create, and manage cards with role-based permissions",
+      "version": "0.1.0",
+      "capabilities": {
+        "tools": true
+      },
+      "authentication": {
+        "type": "api-key",
+        "description": "Requires MCP_USERNAME and MCP_PASSWORD or MCP_API_KEY environment variables"
+      }
+    }
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}
