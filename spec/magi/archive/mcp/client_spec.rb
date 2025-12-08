@@ -434,4 +434,104 @@ RSpec.describe Magi::Archive::Mcp::Client do
       end
     end
   end
+
+  describe "Retry logic" do
+    let(:cards_url) { "https://test.example.com/api/mcp/cards/Test" }
+
+    before do
+      # Stub successful auth
+      allow(client).to receive_message_chain(:auth, :token).and_return(valid_token)
+    end
+
+    it "retries on 5xx server errors" do
+      # First two attempts fail with 500, third succeeds
+      stub_request(:get, cards_url)
+        .to_return(
+          { status: 500, body: '{"error":"internal_error"}' },
+          { status: 500, body: '{"error":"internal_error"}' },
+          { status: 200, body: '{"name":"Test"}', headers: { "Content-Type" => "application/json" } }
+        )
+
+      # Should succeed after retries (suppress stderr output during test)
+      expect { client.get("/cards/Test") }.to output(/Retrying request after/).to_stderr
+
+      # Verify it made 3 requests
+      expect(WebMock).to have_requested(:get, cards_url).times(3)
+    end
+
+    it "retries on 429 rate limit errors" do
+      # First attempt fails with 429, second succeeds
+      stub_request(:get, cards_url)
+        .to_return(
+          { status: 429, body: '{"error":"rate_limit"}' },
+          { status: 200, body: '{"name":"Test"}', headers: { "Content-Type" => "application/json" } }
+        )
+
+      expect { client.get("/cards/Test") }.to output(/Retrying request after/).to_stderr
+      expect(WebMock).to have_requested(:get, cards_url).times(2)
+    end
+
+    it "gives up after 3 retry attempts" do
+      # All 4 attempts (initial + 3 retries) fail
+      stub_request(:get, cards_url)
+        .to_return(status: 500, body: '{"error":"internal_error","message":"Server error"}')
+        .times(4)
+
+      # Should raise error after exhausting retries
+      expect {
+        expect { client.get("/cards/Test") }.to output(/Retrying request after/).to_stderr
+      }.to raise_error(Magi::Archive::Mcp::Client::ServerError)
+
+      # Verify it made exactly 4 requests (initial + 3 retries)
+      expect(WebMock).to have_requested(:get, cards_url).times(4)
+    end
+
+    it "uses exponential backoff (1s, 2s, 4s)" do
+      stub_request(:get, cards_url)
+        .to_return(
+          { status: 500 },
+          { status: 500 },
+          { status: 500 },
+          { status: 200, body: '{"name":"Test"}', headers: { "Content-Type" => "application/json" } }
+        )
+
+      # Track sleep calls to verify backoff delays without waiting
+      sleep_calls = []
+      allow(client).to receive(:sleep) do |duration|
+        sleep_calls << duration
+      end
+
+      # Capture stderr to verify retry messages with correct delays
+      expect {
+        client.get("/cards/Test")
+      }.to output(/Retrying request after 1s.*Retrying request after 2s.*Retrying request after 4s/m).to_stderr
+
+      # Verify exponential backoff: 1s, 2s, 4s
+      expect(sleep_calls).to eq([1, 2, 4])
+    end
+
+    it "does not retry on 4xx client errors" do
+      stub_request(:get, cards_url)
+        .to_return(status: 404, body: '{"error":"not_found"}')
+
+      # Should raise immediately without retry
+      expect {
+        client.get("/cards/Test")
+      }.to raise_error(Magi::Archive::Mcp::Client::NotFoundError)
+
+      # Should only make 1 request (no retries)
+      expect(WebMock).to have_requested(:get, cards_url).once
+    end
+
+    it "retries on network errors" do
+      # First two attempts have network errors, third succeeds
+      stub_request(:get, cards_url)
+        .to_raise(HTTP::ConnectionError).then
+        .to_raise(HTTP::TimeoutError).then
+        .to_return(status: 200, body: '{"name":"Test"}', headers: { "Content-Type" => "application/json" })
+
+      expect { client.get("/cards/Test") }.to output(/Network error, retrying/).to_stderr
+      expect(WebMock).to have_requested(:get, cards_url).times(3)
+    end
+  end
 end

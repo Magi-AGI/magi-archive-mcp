@@ -242,6 +242,32 @@ module Magi
           client.delete(path)
         end
 
+        # Run spoiler scan job
+        #
+        # Scans for spoiler terms leaking from GM/AI content to player content.
+        # Requires GM or admin role.
+        #
+        # @param terms_card [String] name of card containing spoiler terms
+        # @param results_card [String] name of card to write results to
+        # @param scope [String] scope to scan: "player" or "ai" (default: "player")
+        # @param limit [Integer] max results (default: 500, max: 1000)
+        # @return [Hash] with keys: status, matches, results_card, scope, terms_checked
+        #
+        # @example
+        #   result = tools.spoiler_scan(
+        #     terms_card: "SpoilerTerms",
+        #     results_card: "ScanResults",
+        #     scope: "player"
+        #   )
+        #   puts "Found #{result['matches']} spoilers"
+        def spoiler_scan(terms_card:, results_card:, scope: "player", limit: 500)
+          client.post("/jobs/spoiler-scan",
+                      terms_card: terms_card,
+                      results_card: results_card,
+                      scope: scope,
+                      limit: limit)
+        end
+
         # List all card types
         #
         # Gets all available card types in the system.

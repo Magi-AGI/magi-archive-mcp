@@ -52,7 +52,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
           body: {
             name: "Main Page",
             content: "Welcome to the Magi Archive.",
-            type: "Basic",
+            type: "RichText",
             id: 1,
             url: "https://wiki.magi-agi.org/Main_Page",
             created_at: "2024-01-01T00:00:00Z",
@@ -66,7 +66,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
       expect(card).to be_a(Hash)
       expect(card["name"]).to eq("Main Page")
       expect(card["content"]).to eq("Welcome to the Magi Archive.")
-      expect(card["type"]).to eq("Basic")
+      expect(card["type"]).to eq("RichText")
       expect(card["id"]).to eq(1)
       expect(card["url"]).to be_a(String)
       expect(card["created_at"]).to match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/)
@@ -89,13 +89,13 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
               {
                 name: "Business Plan+Overview",
                 content: "Executive summary",
-                type: "Basic",
+                type: "RichText",
                 id: 101
               },
               {
                 name: "Business Plan+Goals",
                 content: "Key objectives",
-                type: "Basic",
+                type: "RichText",
                 id: 102
               }
             ],
@@ -147,7 +147,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
                 card: {
                   name: "Test Card 1",
                   content: "Content 1",
-                  type: "Basic",
+                  type: "RichText",
                   id: 201,
                   url: "https://wiki.magi-agi.org/Test_Card_1"
                 }
@@ -158,7 +158,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
                 card: {
                   name: "Test Card 2",
                   content: "Content 2",
-                  type: "Basic",
+                  type: "RichText",
                   id: 202,
                   url: "https://wiki.magi-agi.org/Test_Card_2"
                 }
