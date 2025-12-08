@@ -1053,7 +1053,10 @@ module Magi
       #     days: 7
       #   )
       def scan_git_repos(base_path: nil, days: 7, since: nil)
-        base_path ||= Dir.pwd
+        # Use WORKING_DIR from environment if base_path not specified
+        # Falls back to current directory as last resort
+        base_path ||= ENV["WORKING_DIR"] || Dir.pwd
+
         since_time = since ? parse_time(since) : (Time.now - (days * 24 * 60 * 60))
         since_str = since_time.strftime("%Y-%m-%d")
 
@@ -1223,21 +1226,25 @@ module Magi
       def find_git_repos(base_path)
         repos = []
 
+        return repos unless File.directory?(base_path)
+
         # Check if base_path itself is a git repo
         if File.directory?(File.join(base_path, ".git"))
           repos << base_path
         end
 
-        # Find subdirectories with .git folders (limit depth to avoid deep scanning)
-        Dir.glob(File.join(base_path, "*", ".git")).each do |git_dir|
-          repos << File.dirname(git_dir)
-        end
-
-        Dir.glob(File.join(base_path, "*", "*", ".git")).each do |git_dir|
-          repos << File.dirname(git_dir)
+        # Find subdirectories with .git folders (search up to 3 levels deep)
+        [1, 2, 3].each do |depth|
+          pattern = File.join(base_path, *Array.new(depth, "*"), ".git")
+          Dir.glob(pattern).each do |git_dir|
+            repos << File.dirname(git_dir)
+          end
         end
 
         repos.uniq
+      rescue StandardError => e
+        warn "Error finding git repos in #{base_path}: #{e.message}"
+        []
       end
 
       # Get git commits for a repository since a date
