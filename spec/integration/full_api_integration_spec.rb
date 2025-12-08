@@ -337,7 +337,8 @@ RSpec.describe "Full API Integration", :integration do
     end
 
     it "searches cards by query string" do
-      result = tools.search_cards(q: "xylophone", limit: 100)
+      # Search in content (not name) since "xylophone" is in card content
+      result = tools.search_cards(q: "xylophone", search_in: "content", limit: 100)
 
       expect(result).to be_a(Hash)
       expect(result["cards"]).to be_an(Array)
