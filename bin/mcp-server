@@ -44,6 +44,11 @@ require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
 # Health check
 require_relative "../lib/magi/archive/mcp/server/tools/health_check"
 
+# Phase 3: Advanced operations
+require_relative "../lib/magi/archive/mcp/server/tools/batch_cards"
+require_relative "../lib/magi/archive/mcp/server/tools/run_query"
+require_relative "../lib/magi/archive/mcp/server/tools/spoiler_scan"
+
 # Initialize the Magi Archive tools
 # This creates an authenticated client using environment variables:
 # - MCP_USERNAME + MCP_PASSWORD (recommended)
@@ -106,7 +111,12 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
 
     # Health check
-    Magi::Archive::Mcp::Server::Tools::HealthCheck
+    Magi::Archive::Mcp::Server::Tools::HealthCheck,
+
+    # Phase 3: Advanced operations
+    Magi::Archive::Mcp::Server::Tools::BatchCards,
+    Magi::Archive::Mcp::Server::Tools::RunQuery,
+    Magi::Archive::Mcp::Server::Tools::SpoilerScan
   ],
   server_context: server_context
 )

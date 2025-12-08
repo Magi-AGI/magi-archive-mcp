@@ -240,8 +240,8 @@ module Magi
 
         private
 
-        # Make HTTP request with authentication
-        def request(method, path, params: nil, json: nil)
+        # Make HTTP request with authentication and retry logic
+        def request(method, path, params: nil, json: nil, retry_count: 0)
           url = config.url_for(path)
           token = auth.token
 
@@ -263,8 +263,24 @@ module Magi
                        raise ArgumentError, "Unsupported HTTP method: #{method}"
                      end
 
+          # Check if we should retry
+          if should_retry?(response, retry_count)
+            retry_delay = calculate_retry_delay(retry_count)
+            $stderr.puts "Retrying request after #{retry_delay}s (attempt #{retry_count + 1}/3)"
+            sleep(retry_delay)
+            return request(method, path, params: params, json: json, retry_count: retry_count + 1)
+          end
+
           handle_response(response)
         rescue HTTP::Error => e
+          # Retry on network errors
+          if retry_count < 3
+            retry_delay = calculate_retry_delay(retry_count)
+            $stderr.puts "Network error, retrying after #{retry_delay}s (attempt #{retry_count + 1}/3)"
+            sleep(retry_delay)
+            return request(method, path, params: params, json: json, retry_count: retry_count + 1)
+          end
+
           raise APIError, "HTTP request failed: #{e.message}"
         end
 
@@ -336,6 +352,20 @@ module Magi
           JSON.parse(response.body.to_s)
         rescue JSON::ParserError
           { "error" => "unknown", "message" => response.body.to_s }
+        end
+
+        # Check if request should be retried
+        def should_retry?(response, retry_count)
+          return false if retry_count >= 3 # Max 3 retries
+
+          # Retry on rate limit (429) or server errors (5xx)
+          response.code == 429 || response.code >= 500
+        end
+
+        # Calculate exponential backoff delay
+        def calculate_retry_delay(retry_count)
+          # Exponential backoff: 1s, 2s, 4s
+          2**retry_count
         end
       end
     end
