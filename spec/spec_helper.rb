@@ -4,7 +4,12 @@ require "magi/archive/mcp"
 require "webmock/rspec"
 
 # Configure WebMock
-WebMock.disable_net_connect!(allow_localhost: false)
+# Allow real connections for integration tests, disable for unit tests
+if ENV["INTEGRATION_TEST"]
+  WebMock.allow_net_connect!
+else
+  WebMock.disable_net_connect!(allow_localhost: false)
+end
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
@@ -18,7 +23,10 @@ RSpec.configure do |config|
   end
 
   # Reset environment variables before each test
-  config.before do
+  # Skip for integration tests which need real credentials
+  config.before do |example|
+    next if example.metadata[:integration]
+
     %w[MCP_API_KEY DECKO_API_BASE_URL MCP_ROLE JWT_ISSUER JWKS_CACHE_TTL
        MCP_USERNAME MCP_PASSWORD].each do |key|
       ENV.delete(key)

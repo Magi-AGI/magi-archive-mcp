@@ -1,30 +1,22 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require_relative "../support/integration_helpers"
 
 RSpec.describe "Full API Integration", :integration do
   # Real HTTP integration tests against actual server
   # Run with: INTEGRATION_TEST=true rspec spec/integration/
+  #
+  # Uses Card-based API key authentication with production server
+  # The integration_helpers module sets up:
+  # - DECKO_API_BASE_URL: https://wiki.magi-agi.org/api/mcp
+  # - MCP_API_KEY: Card-based API key
+  # - MCP_ROLE: admin
 
-  let(:base_url) { ENV.fetch("TEST_API_URL", "http://localhost:3000/api/mcp") }
-  let(:username) { ENV["TEST_USERNAME"] || "test@example.com" }
-  let(:password) { ENV["TEST_PASSWORD"] || "password123" }
+  let(:base_url) { ENV["DECKO_API_BASE_URL"] || "https://wiki.magi-agi.org/api/mcp" }
 
   before do
     skip "Integration tests disabled" unless ENV["INTEGRATION_TEST"]
-
-    # Set up config to point to test server
-    ENV["DECKO_API_BASE_URL"] = base_url
-    ENV["MCP_USERNAME"] = username
-    ENV["MCP_PASSWORD"] = password
-    ENV["MCP_ROLE"] = "admin"
-  end
-
-  after do
-    ENV.delete("DECKO_API_BASE_URL")
-    ENV.delete("MCP_USERNAME")
-    ENV.delete("MCP_PASSWORD")
-    ENV.delete("MCP_ROLE")
   end
 
   describe "Authentication flow" do
@@ -51,10 +43,6 @@ RSpec.describe "Full API Integration", :integration do
 
   describe "Health check" do
     it "returns healthy status without authentication" do
-      # Create client without setting credentials
-      ENV.delete("MCP_USERNAME")
-      ENV.delete("MCP_PASSWORD")
-
       # Health check should work without auth
       require "http"
       response = HTTP.get("#{base_url}/health")
