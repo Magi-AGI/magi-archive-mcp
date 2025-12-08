@@ -378,6 +378,63 @@ RSpec.describe "Full API Integration", :integration do
         expect((card_ids_page1 & card_ids_page2).empty?).to be true
       end
     end
+
+    it "handles date range queries with both updated_since and updated_before" do
+      # This test verifies the fix for date range query bug
+      # where updated_before was overwriting updated_since
+
+      date_prefix = "DateRangeTest#{Time.now.to_i}"
+
+      # Create test cards at different times
+      old_card = tools.create_card(
+        "#{date_prefix}_Old",
+        content: "Old card",
+        type: "RichText"
+      )
+      old_time = Time.now
+
+      sleep 2 # Ensure time difference
+
+      recent_card = tools.create_card(
+        "#{date_prefix}_Recent",
+        content: "Recent card",
+        type: "RichText"
+      )
+      recent_time = Time.now
+
+      sleep 2 # Ensure time difference
+
+      # Query with date range that should include both cards
+      result = tools.search_cards(
+        type: "RichText",
+        updated_since: (old_time - 60).iso8601,
+        updated_before: (recent_time + 60).iso8601,
+        limit: 100
+      )
+
+      expect(result).to be_a(Hash)
+      expect(result["cards"]).to be_an(Array)
+
+      # Both our test cards should be in the results
+      card_names = result["cards"].map { |c| c["name"] }
+      expect(card_names).to include("#{date_prefix}_Old")
+      expect(card_names).to include("#{date_prefix}_Recent")
+
+      # Query with date range that should only include recent card
+      result2 = tools.search_cards(
+        type: "RichText",
+        updated_since: (old_time + 1).iso8601,
+        updated_before: (recent_time + 60).iso8601,
+        limit: 100
+      )
+
+      card_names2 = result2["cards"].map { |c| c["name"] }
+      expect(card_names2).to include("#{date_prefix}_Recent")
+
+      # Cleanup
+      tools.delete_card("#{date_prefix}_Old")
+      tools.delete_card("#{date_prefix}_Recent")
+    end
   end
 
   describe "Rendering operations" do
