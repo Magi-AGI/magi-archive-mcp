@@ -341,9 +341,9 @@ RSpec.describe Magi::Archive::Mcp::Tools, "new features" do
           # Verify it's using transactional mode
           body["mode"] == "transactional" &&
             # Verify both card and tags operations are included
-            body["operations"].size == 2 &&
-            body["operations"][0]["action"] == "create" &&
-            body["operations"][1]["name"].end_with?("+tags")
+            body["ops"]&.size == 2 &&
+            body["ops"][0]["action"] == "create" &&
+            body["ops"][1]["name"].end_with?("+tags")
         }
       end
     end
