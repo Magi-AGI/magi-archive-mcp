@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -i ~/.ssh/magi-archive-key.pem ubuntu@54.219.9.17:*)",
+      "Bash(rubocop:*)",
+      "Bash(ruby --version:*)",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && which ruby && ruby --version\":*)",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && bundle exec rubocop\")",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && /usr/bin/bundle exec rubocop\")",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && gem list | grep -E ''(bundler|rubocop)''\")",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && bundler exec rubocop\")",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && export PATH=/usr/bin:\\$PATH && which bundle && bundle exec rubocop\":*)",
+      "Bash(wsl -e bash -c \"cd /mnt/e/GitLab/the-smithy1/magi/Magi-AGI/magi-archive-mcp && unset PATH && export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bundle install --quiet && bundle exec rubocop\":*)",
+      "WebSearch",
+      "Bash(gem search:*)",
+      "Bash(bundle update:*)",
+      "Bash(timeout 5 ssh:*)",
+      "Bash(curl:*)",
+      "Bash(python -m json.tool:*)",
+      "Bash(cat:*)",
+      "Bash(gem list:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh --version:*)",
+      "Bash(bundle exec rspec:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

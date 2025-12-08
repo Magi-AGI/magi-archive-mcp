@@ -1213,15 +1213,16 @@ module Magi
 
       # Get git commits for a repository since a date
       def get_git_commits(repo_path, since:)
-        # Use Open3.capture3 for safer command execution with timeout
-        stdout, stderr, status = Open3.capture3(
-          "git", "log",
-          "--since=#{since}",
-          "--pretty=format:%h|%an|%ad|%s",
-          "--date=short",
-          chdir: repo_path,
-          timeout: 30 # Prevent hanging on huge repos
-        )
+        # Use Timeout wrapper with Open3.capture3 for safer command execution
+        stdout, stderr, status = Timeout.timeout(30) do
+          Open3.capture3(
+            "git", "log",
+            "--since=#{since}",
+            "--pretty=format:%h|%an|%ad|%s",
+            "--date=short",
+            chdir: repo_path
+          )
+        end
 
         # Return empty if command failed
         return [] unless status.success?

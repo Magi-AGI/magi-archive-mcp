@@ -195,14 +195,15 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
       expect(result).to eq([])
     end
 
-    it "uses Open3.capture3 with timeout for git commands" do
-      # Verify that Open3.capture3 is called with timeout parameter
+    it "uses Timeout.timeout wrapper for git commands" do
+      # Verify that Timeout.timeout wraps Open3.capture3
+      expect(Timeout).to receive(:timeout).with(30).and_call_original
       expect(Open3).to receive(:capture3).with(
         "git", "log",
         "--since=2025-12-01",
         "--pretty=format:%h|%an|%ad|%s",
         "--date=short",
-        hash_including(chdir: test_repo_path, timeout: 30)
+        hash_including(chdir: test_repo_path)
       ).and_return(["abc123|Test|2025-12-03|Commit\n", "", double(success?: true)])
 
       result = tools.send(:get_git_commits, test_repo_path, since: "2025-12-01")
