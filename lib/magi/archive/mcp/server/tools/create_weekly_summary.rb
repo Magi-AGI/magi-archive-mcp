@@ -32,6 +32,10 @@ module Magi
                   type: "string",
                   description: "Custom executive summary text (auto-generated if not provided)"
                 },
+                username: {
+                  type: "string",
+                  description: "Username to include in card name for attribution (default: ENV['USER'] or ENV['USERNAME'])"
+                },
                 create_card: {
                   type: "boolean",
                   description: "Whether to create the card on the wiki (false returns preview only)",
@@ -42,7 +46,7 @@ module Magi
             )
 
             class << self
-              def call(base_path: nil, days: 7, date: nil, executive_summary: nil, create_card: true, server_context:)
+              def call(base_path: nil, days: 7, date: nil, executive_summary: nil, username: nil, create_card: true, server_context:)
                 tools = server_context[:magi_tools]
 
                 # Get base path from server context if not provided
@@ -55,6 +59,7 @@ module Magi
                 }
                 params[:date] = date if date
                 params[:executive_summary] = executive_summary if executive_summary
+                params[:username] = username if username
 
                 result = tools.create_weekly_summary(**params)
 

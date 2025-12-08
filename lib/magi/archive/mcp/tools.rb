@@ -1157,10 +1157,13 @@ module Magi
       # @example Generate content without creating card
       #   markdown = tools.create_weekly_summary(create_card: false)
       #   puts markdown
-      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Home", create_card: true)
+      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Home", create_card: true, username: nil)
+        # Get username from environment if not provided
+        username ||= ENV["USER"] || ENV["USERNAME"] || "Unknown User"
+
         # Get date string for card name
         date_str = date || Time.now.strftime("%Y %m %d")
-        card_name = "Weekly Work Summary #{date_str}"
+        card_name = "Weekly Work Summary #{date_str}+#{username}"
 
         # Fetch recent changes
         card_changes = get_recent_changes(days: days)
