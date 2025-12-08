@@ -5,7 +5,7 @@ require "spec_helper"
 RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
   let(:tools) { described_class.new }
   let(:valid_token) { "test-token-123" }
-  let(:base_url) { "https://test.example.com" }
+  let(:base_url) { "https://test.example.com/api/mcp" }
 
   before do
     # Set up required environment variables for config initialization
@@ -43,7 +43,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "fetches cards updated in the last 7 days by default" do
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
         .with(
           headers: { "Authorization" => "Bearer #{valid_token}" },
           query: hash_including("updated_since", "updated_before", "limit" => "100", "offset" => "0")
@@ -66,7 +66,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "supports custom date range" do
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
         .with(
           headers: { "Authorization" => "Bearer #{valid_token}" },
           query: hash_including(
@@ -88,11 +88,11 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
       page1 = { cards: [recent_cards[0]], total: 2, offset: 0, next_offset: 1 }
       page2 = { cards: [recent_cards[1]], total: 2, offset: 1, next_offset: nil }
 
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
         .with(query: hash_including("offset" => "0"))
         .to_return(status: 200, body: page1.to_json)
 
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
         .with(query: hash_including("offset" => "1"))
         .to_return(status: 200, body: page2.to_json)
 
@@ -102,7 +102,8 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "sorts results by updated_at descending" do
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
+        .with(query: hash_including({}))
         .to_return(
           status: 200,
           body: { cards: recent_cards.reverse, total: 2, offset: 0, next_offset: nil }.to_json
@@ -116,7 +117,8 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
 
     it "prevents infinite loops with pagination safety counter" do
       # Simulate a server bug where next_offset keeps incrementing
-      stub_request(:get, "#{base_url}/api/mcp/cards")
+      stub_request(:get, "#{base_url}/cards")
+        .with(query: hash_including({}))
         .to_return do |request|
           offset = request.uri.query_values["offset"].to_i
           {
@@ -314,6 +316,13 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     before do
       allow(tools).to receive(:get_recent_changes).and_return(card_changes)
       allow(tools).to receive(:scan_git_repos).and_return(repo_changes)
+
+      # Stub the GET request for the parent card (Home)
+      stub_request(:get, "#{base_url}/cards/Home")
+        .to_return(
+          status: 200,
+          body: { name: "Home", id: 1, type: "Basic" }.to_json
+        )
     end
 
     it "returns markdown content when create_card is false" do
@@ -325,7 +334,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "creates a weekly summary card" do
-      stub_request(:post, "#{base_url}/api/mcp/cards")
+      stub_request(:post, "#{base_url}/cards")
         .with(
           headers: { "Authorization" => "Bearer #{valid_token}" },
           body: hash_including(
@@ -350,7 +359,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "supports custom date" do
-      stub_request(:post, "#{base_url}/api/mcp/cards")
+      stub_request(:post, "#{base_url}/cards")
         .with(body: hash_including("name" => "Weekly Work Summary 2025 12 09"))
         .to_return(
           status: 201,
@@ -365,19 +374,19 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     it "supports custom executive summary" do
       custom_summary = "Focused on Phase 2.1 completion."
 
-      stub_request(:post, "#{base_url}/api/mcp/cards")
+      stub_request(:post, "#{base_url}/cards")
         .with(body: hash_including("content" => /Focused on Phase 2\.1 completion/))
         .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
 
       tools.create_weekly_summary(executive_summary: custom_summary)
 
-      expect(WebMock).to have_requested(:post, "#{base_url}/api/mcp/cards")
+      expect(WebMock).to have_requested(:post, "#{base_url}/cards")
     end
 
     it "scans repositories from specified base path" do
       expect(tools).to receive(:scan_git_repos).with(base_path: "/custom/path", days: 7)
 
-      stub_request(:post, "#{base_url}/api/mcp/cards")
+      stub_request(:post, "#{base_url}/cards")
         .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
 
       tools.create_weekly_summary(base_path: "/custom/path")
@@ -386,7 +395,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     it "supports custom lookback period" do
       expect(tools).to receive(:get_recent_changes).with(days: 14)
 
-      stub_request(:post, "#{base_url}/api/mcp/cards")
+      stub_request(:post, "#{base_url}/cards")
         .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
 
       tools.create_weekly_summary(days: 14)

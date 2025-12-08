@@ -79,11 +79,13 @@ module Magi
         # @example Paginated search
         #   page1 = tools.search_cards(q: "plan", limit: 10, offset: 0)
         #   page2 = tools.search_cards(q: "plan", limit: 10, offset: 10)
-        def search_cards(q: nil, type: nil, search_in: nil, limit: 50, offset: 0)
+        def search_cards(q: nil, type: nil, search_in: nil, updated_since: nil, updated_before: nil, limit: 50, offset: 0)
           params = { limit: limit, offset: offset }
           params[:q] = q if q
           params[:type] = type if type
           params[:search_in] = search_in if search_in
+          params[:updated_since] = updated_since if updated_since
+          params[:updated_before] = updated_before if updated_before
 
           client.get("/cards", **params)
         end
@@ -531,18 +533,27 @@ module Magi
           end
 
           # Execute as atomic transaction
-          result = batch_operations(operations, mode: "transactional")
+          begin
+            result = batch_operations(operations, mode: "transactional")
 
-          # Return the main card from batch results
-          main_card_result = result["results"]&.first
-          return main_card_result["card"] if main_card_result&.dig("status") == "success"
+            # Return the main card from batch results
+            main_card_result = result["results"]&.first
+            return main_card_result["card"] if main_card_result&.dig("status") == "success"
 
-          # If batch failed, return error details
-          {
-            "status" => "error",
-            "message" => result["message"] || "Failed to create card with tags",
-            "errors" => result["results"]&.map { |r| r["error"] }&.compact || []
-          }
+            # If batch failed, return error details
+            {
+              "status" => "error",
+              "message" => result["message"] || "Failed to create card with tags",
+              "errors" => result["results"]&.map { |r| r["error"] }&.compact || []
+            }
+          rescue Client::APIError => e
+            # Handle batch transaction failure
+            {
+              "status" => "error",
+              "message" => e.message,
+              "errors" => e.details&.dig("results")&.map { |r| r["error"] }&.compact || [e.message]
+            }
+          end
         end
 
         # Get structure recommendations for a card
@@ -932,6 +943,8 @@ module Magi
           end.join
         end
 
+      public
+
       # === Weekly Summary Operations ===
 
       # Get cards updated within a date range
@@ -973,8 +986,8 @@ module Magi
           end
 
           result = search_cards(
-            updated_since: since_time.iso8601,
-            updated_before: before_time.iso8601,
+            updated_since: since_time.utc.iso8601,
+            updated_before: before_time.utc.iso8601,
             limit: limit,
             offset: offset
           )
@@ -1167,7 +1180,14 @@ module Magi
       def parse_time(time_input)
         return time_input if time_input.is_a?(Time)
 
-        Time.parse(time_input.to_s)
+        str = time_input.to_s
+        # If it's a date-only string (YYYY-MM-DD), parse as UTC midnight
+        # to avoid timezone conversion issues
+        if str.match?(/^\d{4}-\d{2}-\d{2}$/)
+          Time.parse("#{str} 00:00:00 UTC")
+        else
+          Time.parse(str).utc
+        end
       end
 
       # Find all git repositories under a path
