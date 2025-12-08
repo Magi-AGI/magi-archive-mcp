@@ -155,20 +155,32 @@ RSpec.describe "Full API Integration", :integration do
   describe "List children" do
     let(:tools) { Magi::Archive::Mcp::Tools.new }
 
-    it "lists children of a parent card", skip: "Server returns NoMethodError - needs server-side fix" do
+    it "lists children of a parent card" do
       parent_name = "IntegrationTestParent#{Time.now.to_i}"
       child_name = "#{parent_name}+Child"
 
       # Create parent and child cards
-      tools.create_card(parent_name, content: "Parent", type: "RichText")
-      tools.create_card(child_name, content: "Child", type: "RichText")
+      parent = tools.create_card(parent_name, content: "Parent", type: "RichText")
+      puts "DEBUG: Created parent: #{parent["name"]}"
+
+      child = tools.create_card(child_name, content: "Child", type: "RichText")
+      puts "DEBUG: Created child: #{child["name"]}"
+
+      # Verify child can be fetched directly
+      fetched_child = tools.get_card(child_name)
+      puts "DEBUG: Fetched child directly: #{fetched_child["name"]}"
+
+      # Small delay to ensure database commit
+      sleep 0.5
 
       # List children
       result = tools.list_children(parent_name)
+      puts "DEBUG: list_children result: #{result.inspect}"
 
       expect(result).to be_a(Hash)
       expect(result["parent"]).to eq(parent_name)
       expect(result["children"]).to be_an(Array)
+      puts "DEBUG: children array: #{result["children"].inspect}"
       expect(result["children"].length).to be >= 1
       expect(result).to have_key("child_count")
 
@@ -291,6 +303,159 @@ RSpec.describe "Full API Integration", :integration do
       expect(card["name"]).to eq(special_name)
 
       tools.delete_card(special_name)
+    end
+  end
+
+  describe "Search operations" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+    let(:search_prefix) { "SearchTest#{Time.now.to_i}" }
+
+    before do
+      # Create test cards with searchable content
+      @card1 = tools.create_card(
+        "#{search_prefix}_Alpha",
+        content: "This card contains keyword xylophone",
+        type: "RichText"
+      )
+      @card2 = tools.create_card(
+        "#{search_prefix}_Beta",
+        content: "This card also has xylophone in it",
+        type: "RichText"
+      )
+      @card3 = tools.create_card(
+        "#{search_prefix}_Gamma",
+        content: "This card has different content",
+        type: "RichText"
+      )
+      sleep 1 # Give search index time to update
+    end
+
+    after do
+      tools.delete_card("#{search_prefix}_Alpha") rescue nil
+      tools.delete_card("#{search_prefix}_Beta") rescue nil
+      tools.delete_card("#{search_prefix}_Gamma") rescue nil
+    end
+
+    it "searches cards by query string" do
+      result = tools.search_cards(q: "xylophone", limit: 100)
+
+      expect(result).to be_a(Hash)
+      expect(result["cards"]).to be_an(Array)
+
+      # Should find at least our 2 test cards (if indexing has completed)
+      matching_cards = result["cards"].select { |c| c["name"].start_with?(search_prefix) }
+      expect(matching_cards.length).to be >= 2
+    end
+
+    it "searches cards by type" do
+      result = tools.search_cards(type: "RichText", limit: 100)
+
+      expect(result).to be_a(Hash)
+      expect(result["cards"]).to be_an(Array)
+      expect(result["cards"].length).to be > 0
+
+      # All results should be RichText
+      result["cards"].each do |card|
+        expect(card["type"]).to eq("RichText")
+      end
+    end
+
+    it "handles pagination with offset" do
+      # Get first page
+      page1 = tools.search_cards(type: "RichText", limit: 5, offset: 0)
+
+      # Get second page
+      page2 = tools.search_cards(type: "RichText", limit: 5, offset: 5)
+
+      expect(page1["cards"]).to be_an(Array)
+      expect(page2["cards"]).to be_an(Array)
+
+      # Pages should have different cards (unless fewer than 6 total)
+      if page1["cards"].length == 5 && page2["cards"].length > 0
+        card_ids_page1 = page1["cards"].map { |c| c["id"] }
+        card_ids_page2 = page2["cards"].map { |c| c["id"] }
+        expect((card_ids_page1 & card_ids_page2).empty?).to be true
+      end
+    end
+  end
+
+  describe "Rendering operations" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+
+    it "converts HTML to Markdown" do
+      html_content = "<h1>Test Heading</h1><p>This is <strong>bold</strong> text.</p><ul><li>Item 1</li><li>Item 2</li></ul>"
+
+      result = tools.render_snippet(html_content, from: :html, to: :markdown)
+
+      expect(result).to be_a(Hash)
+      expect(result).to have_key("markdown")
+      expect(result["markdown"]).to be_a(String)
+      expect(result["markdown"]).to include("# Test Heading")
+      expect(result["markdown"]).to include("**bold**")
+    end
+
+    it "converts Markdown to HTML" do
+      markdown_content = "# Test Heading\n\nThis is **bold** text.\n\n- Item 1\n- Item 2"
+
+      result = tools.render_snippet(markdown_content, from: :markdown, to: :html)
+
+      expect(result).to be_a(Hash)
+      expect(result).to have_key("html")
+      expect(result["html"]).to be_a(String)
+      expect(result["html"]).to include("<h1>")
+      expect(result["html"]).to include("<strong>")
+      expect(result["html"]).to include("<li>")
+    end
+
+    it "handles complex HTML with nested elements" do
+      complex_html = <<~HTML
+        <div>
+          <h2>Section</h2>
+          <p>Paragraph with <em>emphasis</em> and <code>code</code>.</p>
+          <blockquote>A quote</blockquote>
+        </div>
+      HTML
+
+      result = tools.render_snippet(complex_html, from: :html, to: :markdown)
+
+      expect(result["markdown"]).to be_a(String)
+      expect(result["markdown"]).to include("## Section")
+      expect(result["markdown"]).to match(/\*emphasis\*|_emphasis_/)
+    end
+  end
+
+  describe "Type discovery" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+
+    it "lists available card types" do
+      result = tools.list_types(limit: 100)
+
+      expect(result).to be_a(Hash)
+      expect(result["types"]).to be_an(Array)
+      expect(result["types"].length).to be > 0
+
+      # Check structure of type objects
+      first_type = result["types"].first
+      expect(first_type).to have_key("name")
+
+      # Should include common types
+      type_names = result["types"].map { |t| t["name"] }
+      expect(type_names).to include("RichText")
+    end
+
+    it "handles pagination for types" do
+      page1 = tools.list_types(limit: 10, offset: 0)
+      page2 = tools.list_types(limit: 10, offset: 10)
+
+      expect(page1["types"]).to be_an(Array)
+      expect(page2["types"]).to be_an(Array)
+
+      # Pages should have different types (unless fewer than 11 total)
+      if page1["types"].length == 10 && page2["types"].length > 0
+        type_names_page1 = page1["types"].map { |t| t["name"] }
+        type_names_page2 = page2["types"].map { |t| t["name"] }
+        expect((type_names_page1 & type_names_page2).empty?).to be true
+      end
     end
   end
 end
