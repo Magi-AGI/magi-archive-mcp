@@ -164,7 +164,7 @@ module Magi
         #
         # @param name [String] the card name (required)
         # @param content [String, nil] the card content (optional)
-        # @param type [String, nil] the card type (optional, defaults to "Basic")
+        # @param type [String, nil] the card type (optional, defaults to "RichText")
         # @param metadata [Hash] additional card metadata (optional)
         # @return [Hash] created card data with id, name, url, etc.
         # @raise [Client::ValidationError] if parameters are invalid
@@ -1184,7 +1184,7 @@ module Magi
         card = self.create_card(
           card_name,
           content: content,
-          type: "Markdown"
+          type: "RichText"
         )
 
         # Add to parent hierarchy if specified
