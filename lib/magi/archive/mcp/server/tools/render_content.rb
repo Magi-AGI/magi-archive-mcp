@@ -49,7 +49,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error rendering content: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private

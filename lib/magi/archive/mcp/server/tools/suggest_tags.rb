@@ -63,12 +63,12 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: Card '#{card_name}' not found"
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error suggesting tags: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private
@@ -77,7 +77,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: #{message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               def analyze_content_for_tags(content, name, type, limit, tools)

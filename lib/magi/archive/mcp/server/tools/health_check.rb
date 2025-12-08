@@ -40,7 +40,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: format_error(e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

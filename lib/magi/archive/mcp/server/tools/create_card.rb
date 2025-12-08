@@ -50,17 +50,17 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.validation_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authorization_error("create", name, required_role: "user")
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthenticationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authentication_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 # Log to stderr for debugging
                 $stderr.puts "ERROR in create_card: #{e.class}: #{e.message}"
@@ -69,7 +69,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("creating card '#{name}'", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

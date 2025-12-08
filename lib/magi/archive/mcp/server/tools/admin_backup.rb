@@ -58,12 +58,12 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: Admin role required for backup operations"
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error with backup operation: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private
@@ -72,7 +72,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: #{message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               def format_backup_result(operation, result)

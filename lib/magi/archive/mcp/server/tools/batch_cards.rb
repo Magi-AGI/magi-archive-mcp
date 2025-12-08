@@ -77,12 +77,12 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.validation_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authorization_error("batch operations", "multiple cards", required_role: "user")
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 $stderr.puts "ERROR in batch_cards: #{e.class}: #{e.message}"
                 $stderr.puts e.backtrace.first(5).join("\n")
@@ -90,7 +90,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("batch card operations", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private
@@ -99,7 +99,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: #{message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               def format_batch_result(result, mode)

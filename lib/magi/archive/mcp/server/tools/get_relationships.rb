@@ -51,12 +51,12 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: Card '#{card_name}' not found"
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error getting relationships: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private

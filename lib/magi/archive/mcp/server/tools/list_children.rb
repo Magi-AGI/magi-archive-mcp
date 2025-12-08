@@ -45,22 +45,22 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.not_found("Card", parent_name)
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authorization_error("view children of", parent_name, required_role: "gm")
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthenticationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authentication_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("listing children of '#{parent_name}'", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

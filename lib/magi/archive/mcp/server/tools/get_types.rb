@@ -38,7 +38,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error listing types: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private

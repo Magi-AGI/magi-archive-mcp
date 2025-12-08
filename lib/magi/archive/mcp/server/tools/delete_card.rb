@@ -41,27 +41,27 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.not_found("Card", name)
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authorization_error("delete", name, required_role: "admin")
-                }], is_error: true)
+                }], error: true)
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.validation_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthenticationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authentication_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("deleting card '#{name}'", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

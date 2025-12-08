@@ -74,17 +74,17 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authorization_error("search", "cards", required_role: "user")
-                }], is_error: true)
+                }], error: true)
               rescue Client::AuthenticationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.authentication_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("searching cards", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

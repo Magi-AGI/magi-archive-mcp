@@ -63,17 +63,17 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "❌ **Permission Denied**\n\nSpoiler scans require GM or Admin role.\n\nYour current role does not have permission to run spoiler scans. This operation is restricted to Game Masters and Administrators to prevent unauthorized access to sensitive content.\n\nRequired role: GM or Admin"
-                }], is_error: true)
+                }], error: true)
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.validation_error(e.message)
-                }], is_error: true)
+                }], error: true)
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: #{e.message}\n\nCheck that the terms_card name is correct and the card exists."
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 $stderr.puts "ERROR in spoiler_scan: #{e.class}: #{e.message}"
                 $stderr.puts e.backtrace.first(5).join("\n")
@@ -81,7 +81,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: ErrorFormatter.generic_error("spoiler scan", e)
-                }], is_error: true)
+                }], error: true)
               end
 
               private

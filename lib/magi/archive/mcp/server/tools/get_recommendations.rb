@@ -64,12 +64,12 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: Card not found"
-                }], is_error: true)
+                }], error: true)
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error getting recommendations: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private
@@ -78,7 +78,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error: #{message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               def format_recommendation(operation, result)

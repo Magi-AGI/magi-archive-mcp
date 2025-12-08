@@ -53,7 +53,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error searching by tags: #{e.message}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private

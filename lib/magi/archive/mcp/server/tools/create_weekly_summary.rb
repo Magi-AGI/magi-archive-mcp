@@ -75,7 +75,7 @@ module Magi
                 ::MCP::Tool::Response.new([{
                   type: "text",
                   text: "Error creating weekly summary: #{e.message}\n#{e.backtrace.first(5).join("\n")}"
-                }], is_error: true)
+                }], error: true)
               end
 
               private
