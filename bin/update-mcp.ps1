@@ -188,15 +188,21 @@ function Update-Claude {
         $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
         $gemfile = Join-Path $ProjectRoot "Gemfile"
 
-        claude mcp add `
-            --scope user `
-            --transport stdio `
-            magi-archive `
-            --env "MCP_USERNAME=$env:MCP_USERNAME" `
-            --env "MCP_PASSWORD=$env:MCP_PASSWORD" `
-            --env "DECKO_API_BASE_URL=$env:DECKO_API_BASE_URL" `
-            --env "BUNDLE_GEMFILE=$gemfile" `
-            -- bundle exec ruby $serverPath $env:WORKING_DIR
+        # Build command as array to ensure proper argument parsing
+        $claudeArgs = @(
+            'mcp', 'add',
+            '--scope', 'user',
+            '--transport', 'stdio',
+            'magi-archive',
+            '--env', "MCP_USERNAME=$env:MCP_USERNAME",
+            '--env', "MCP_PASSWORD=$env:MCP_PASSWORD",
+            '--env', "DECKO_API_BASE_URL=$env:DECKO_API_BASE_URL",
+            '--env', "BUNDLE_GEMFILE=$gemfile",
+            '--',
+            'bundle', 'exec', 'ruby', $serverPath, $env:WORKING_DIR
+        )
+
+        & claude $claudeArgs
 
         if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput Green "[+] Claude CLI updated successfully"
