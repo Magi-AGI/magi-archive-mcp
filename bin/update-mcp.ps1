@@ -31,13 +31,17 @@ $EnvFile = Join-Path $ProjectRoot ".env"
 if (Test-Path $EnvFile) {
     Write-ColorOutput Green "[+] Found existing .env file with credentials"
 
-    # Load .env file
+    # Load .env file - parse and set environment variables directly
     Get-Content $EnvFile | ForEach-Object {
-        $line = $_
-        if ($line -match '^(\w+)=(.*)$') {
-            $name = $matches[1].Trim()
-            $value = $matches[2].Trim()
-            [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+        $line = $_.Trim()
+        # Skip comments and empty lines
+        if ($line -and -not $line.StartsWith('#')) {
+            if ($line -match '^(\w+)=(.*)$') {
+                $name = $matches[1]
+                $value = $matches[2]
+                # Set environment variable directly
+                Set-Item -Path "env:$name" -Value $value
+            }
         }
     }
 } else {
