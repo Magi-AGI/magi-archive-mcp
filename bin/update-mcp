@@ -30,7 +30,7 @@ else
     echo ""
 
     # Prompt for credentials
-    read -p "Decko username (email): " MCP_USERNAME
+    read -p "Decko email address: " MCP_USERNAME
     read -sp "Decko password: " MCP_PASSWORD
     echo ""
     read -p "Working directory for git scanning [${PROJECT_ROOT}]: " WORKING_DIR
@@ -172,7 +172,10 @@ update_claude() {
         fi
 
         echo -e "${GREEN}✓${NC} Installing magi-archive server..."
-        claude mcp add magi-archive \
+        claude mcp add \
+            --scope user \
+            --transport stdio \
+            magi-archive \
             --env "MCP_USERNAME=$MCP_USERNAME" \
             --env "MCP_PASSWORD=$MCP_PASSWORD" \
             --env "DECKO_API_BASE_URL=$DECKO_API_BASE_URL" \
