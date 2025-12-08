@@ -72,7 +72,7 @@ module Magi
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: "Error: #{e.message}\n\nCheck that the terms_card name is correct and the card exists."
+                  text: format_not_found_error(e.message, terms_card)
                 }], error: true)
               rescue StandardError => e
                 $stderr.puts "ERROR in spoiler_scan: #{e.class}: #{e.message}"
@@ -85,6 +85,45 @@ module Magi
               end
 
               private
+
+              def format_not_found_error(message, card_name)
+                parts = []
+                parts << "❌ **Spoiler Terms Card Not Found**"
+                parts << ""
+                parts << "**Searched for:** `#{card_name}`"
+                parts << ""
+                parts << "**The Problem:**"
+                parts << "The spoiler scan requires a card containing the spoiler terms to search for."
+                parts << "The card '#{card_name}' does not exist on the wiki."
+                parts << ""
+                parts << "**How to Fix:**"
+                parts << ""
+                parts << "**Option 1: Create the terms card**"
+                parts << "```"
+                parts << "create_card("
+                parts << "  name: \"#{card_name}\","
+                parts << "  type: \"Basic\","
+                parts << "  content: \"[[Spoiler Term 1]]\\n[[Spoiler Term 2]]\\n[[Another Term]]\""
+                parts << ")"
+                parts << "```"
+                parts << ""
+                parts << "**Option 2: Search for existing cards**"
+                parts << "```"
+                parts << "search_cards(q: \"spoiler\", limit: 10)"
+                parts << "```"
+                parts << ""
+                parts << "**Terms Card Format:**"
+                parts << "The terms card should contain spoiler terms in one of these formats:"
+                parts << "- One term per line: `Secret Plot\\nHidden Base\\nBig Reveal`"
+                parts << "- Link format: `[[Secret Plot]]\\n[[Hidden Base]]\\n[[Big Reveal]]`"
+                parts << "- Bullet list: `- Secret Plot\\n- Hidden Base\\n- Big Reveal`"
+                parts << ""
+                parts << "**Example:**"
+                parts << "If you have GM-only terms like \"Ancient Prophecy\", \"Crystal Heart\", \"True Identity\","
+                parts << "create a card with those terms, then run the scan to find if they leaked into player content."
+
+                parts.join("\n")
+              end
 
               def format_scan_result(result)
                 status = result["status"]
