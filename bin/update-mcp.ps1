@@ -49,7 +49,7 @@ if (Test-Path $EnvFile) {
     Write-Output ""
 
     # Prompt for credentials
-    $username = Read-Host "Decko username (email)"
+    $username = Read-Host "Decko email address"
     $password = Read-Host "Decko password" -AsSecureString
     $passwordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
         [Runtime.InteropServices.Marshal]::SecureStringToBSTR($password))

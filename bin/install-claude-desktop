@@ -121,7 +121,7 @@ class ClaudeDesktopInstaller
   end
 
   def get_username_password
-    print "Decko username: "
+    print "Decko email address: "
     username = gets.chomp
 
     print "Decko password: "

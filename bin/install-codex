@@ -141,7 +141,7 @@ class CodexInstaller
   private
 
   def get_username_password
-    print "Decko username (email address): "
+    print "Decko email address: "
     username = gets.chomp
 
     print "Decko password: "
