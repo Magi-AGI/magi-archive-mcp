@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Magi Archive MCP Server** is a Model Context Protocol (MCP) implementation in Ruby that provides secure, role-aware API access to the `wiki.magi-agi.org` Decko application. It enables AI agents (Claude, Gemini, Codex CLIs) to interact with the Magi Archive, replacing legacy SSH scripts with a structured JSON API.
 
-**Current Status**: Specification phase - implementation not yet scaffolded.
+**Current Status**: Phase 3 complete - All core features, basic tools, and advanced features are fully implemented and operational.
 
 ## Core Architecture
 
@@ -21,13 +21,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **GM Role** (`mcp-gm`): Read GM-only content, no destructive operations
 3. **Admin Role** (`mcp-admin`): Full access including delete/move operations
 
-### Key MCP Tools (to be implemented)
+### Key MCP Tools (Implemented)
 - `get_card`, `search_cards`, `list_children` - Card retrieval
 - `create_card`, `update_card`, `delete_card` - Card mutation (role-gated)
+- `get_tags`, `search_by_tags`, `suggest_tags` - Tag operations and AI-assisted suggestions
+- `get_relationships` - Card relationship queries (referers, links, nests)
+- `validate_card`, `get_recommendations` - Card validation and structure recommendations
+- `get_types`, `render_content` - Type discovery and HTML↔Markdown conversion
+- `batch_cards` - Bulk operations with partial failure handling
 - `run_query` - Safe CQL queries with enforced limits
-- `render_snippet` - HTML↔Markdown conversion
-- `cards/batch` - Bulk operations with partial failure handling
-- `jobs/spoiler-scan` - GM/admin-triggered content scanning
+- `spoiler_scan` - GM/admin-triggered content scanning
+- `health_check` - Wiki availability monitoring (no auth required)
+- `admin_backup` - Database backup management (admin-only)
+- `create_weekly_summary` - Automated weekly summaries with git integration
 
 ## Development Commands
 
@@ -134,26 +140,26 @@ All endpoints require `Authorization: Bearer <jwt_token>`:
 
 ## Implementation Priorities
 
-### Phase 1: Core Infrastructure
-1. Scaffold Ruby gem structure (`bundle gem magi-archive-mcp`)
-2. Set up RSpec and RuboCop configuration
-3. Implement JWT verification against Decko JWKS
-4. Create base HTTP client for Decko API calls
-5. Add environment configuration (`.env` support)
+### Phase 1: Core Infrastructure ✅ COMPLETE
+1. ✅ Scaffold Ruby gem structure (`bundle gem magi-archive-mcp`)
+2. ✅ Set up RSpec and RuboCop configuration
+3. ✅ Implement JWT verification against Decko JWKS
+4. ✅ Create base HTTP client for Decko API calls
+5. ✅ Add environment configuration (`.env` support)
 
-### Phase 2: Basic MCP Tools
-1. Implement `get_card` and `search_cards`
-2. Add `create_card` and `update_card`
-3. Implement role enforcement layer
-4. Add pagination handling
-5. Create MCP tool schema definitions
+### Phase 2: Basic MCP Tools ✅ COMPLETE
+1. ✅ Implement `get_card` and `search_cards`
+2. ✅ Add `create_card` and `update_card`
+3. ✅ Implement role enforcement layer
+4. ✅ Add pagination handling
+5. ✅ Create MCP tool schema definitions
 
-### Phase 3: Advanced Features
-1. Implement `cards/batch` with partial failure handling
-2. Add `render_snippet` HTML/Markdown conversion
-3. Implement `run_query` with CQL safety filters
-4. Add `jobs/spoiler-scan` for GM workflows
-5. Implement rate limiting and retry logic
+### Phase 3: Advanced Features ✅ COMPLETE
+1. ✅ Implement `cards/batch` with partial failure handling
+2. ✅ Add `render_content` HTML/Markdown conversion
+3. ✅ Implement `run_query` with CQL safety filters
+4. ✅ Add `jobs/spoiler-scan` for GM workflows
+5. ✅ Implement rate limiting and retry logic
 
 ## Security Considerations
 
