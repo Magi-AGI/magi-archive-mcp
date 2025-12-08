@@ -14,11 +14,12 @@ This document tracks remaining work items and known issues after the integration
 - ✅ Verified transactional mode works correctly
 - ✅ Added `list_children` integration test (found server bug)
 
-### Test Results Summary
+### Test Results Summary (Updated 2025-12-08)
 - **Unit Tests**: 178 passing (includes 6 new retry tests)
-- **Integration Tests**: 12 passing, 2 appropriately pending
+- **Integration Tests**: 21 passing, 1 failing (search indexing), 1 pending
 - **Contract Tests**: 1 passing
-- **Total**: 191 examples, 0 failures, 19 pending
+- **Total**: 22 integration tests
+- **Status**: ✅ Fixed 2 major bugs (render endpoints, list_children)
 
 ## 🔴 Critical Server Bugs (Blocking)
 
@@ -65,14 +66,24 @@ This document tracks remaining work items and known issues after the integration
 2. Create `spec/integration_ci/` with always-run tests
 3. Add make task: `make integration-test`
 
+### Issue #3: Search Indexing Delay
+**Status**: INVESTIGATING - Test reveals possible issue
+**Impact**: Newly created cards not immediately searchable by content
+**Details**:
+- Test creates cards with keyword "xylophone"
+- Search returns 0 results instead of expected 2
+- Could be indexing delay OR indexing not working
+**Test Location**: `spec/integration/full_api_integration_spec.rb:327`
+**Action**: Investigate if this is expected behavior or a bug
+
 ## 📋 Missing Integration Test Coverage
 
 Only ~30% of API endpoints have integration tests. See `TESTING-GAPS.md` for full list.
 
 ### High Priority (Core API):
-- [ ] `search_cards` - Fundamental search operation
-- [ ] `render_snippet` - Content transformation
-- [ ] `list_types` - Type discovery
+- [x] `search_cards` - ✅ Added (3 tests: query, type, pagination)
+- [x] `render_snippet` - ✅ Added (3 tests: HTML→MD, MD→HTML, complex) - **Exposing Bug #3**
+- [x] `list_types` - ✅ Added (2 tests: list, pagination)
 - [ ] Tag operations - Content organization
 - [ ] Relationship operations - Graph navigation
 

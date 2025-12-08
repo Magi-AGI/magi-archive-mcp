@@ -2,11 +2,11 @@
 
 This document tracks bugs discovered in the `magi-archive` server (wiki.magi-agi.org) during MCP client integration testing.
 
-## Bug #1: `/cards/:name/children` Endpoint Returns NoMethodError
+## Bug #1: `/cards/:name/children` Endpoint Returns NoMethodError ✅ FIXED
 
 **Severity**: HIGH
 **Impact**: `list_children` API completely unusable
-**Status**: Confirmed - Affects ALL card names
+**Status**: ✅ FIXED in commit 55685de - Now uses left_id foreign key queries
 
 ### Description
 
@@ -181,6 +181,65 @@ For questions about these bugs, see:
 - **Server implementation**: `magi-archive` repository
 - **MCP Specification**: `MCP-SPEC.md`
 
+## Bug #3: `/render` and `/render/markdown` Endpoints Return 404 ✅ FIXED
+
+**Severity**: HIGH
+**Impact**: Content transformation completely unavailable
+**Status**: ✅ FIXED in commit 55685de
+
+### Description
+
+The `/render` and `/render/markdown` endpoints return HTTP 404 (Not Found), indicating these endpoints are not implemented on the server despite being documented in the MCP specification.
+
+### Reproduction
+
+```ruby
+# All render operations return 404
+tools.render_snippet(html_content, from: :html, to: :markdown) # 404
+tools.render_snippet(markdown_content, from: :markdown, to: :html) # 404
+```
+
+### Expected Behavior
+
+**POST /render** (HTML→Markdown):
+```json
+{
+  "markdown": "# Hello\n\nThis is **bold**.",
+  "format": "gfm"
+}
+```
+
+**POST /render/markdown** (Markdown→HTML):
+```json
+{
+  "html": "<h1>Hello</h1><p>This is <strong>bold</strong>.</p>",
+  "format": "html"
+}
+```
+
+### Actual Behavior
+
+```
+HTTP 404 Not Found
+```
+
+### Client-Side Impact
+
+- Content transformation unavailable
+- MCP tools cannot convert between HTML and Markdown
+- Contract tests pass (mocked responses), but integration tests fail
+- 3 integration tests failing due to this bug
+
+### Server Action Required
+
+Implement the `/api/mcp/render` and `/api/mcp/render/markdown` endpoints as specified in MCP-SPEC.md.
+
+### Priority
+
+**HIGH** - This is a documented MCP endpoint that should be functional. Content transformation is a core feature.
+
+---
+
 ## Last Updated
 
-2025-12-08 - Initial bug report after comprehensive integration testing
+2025-12-08 - Added render endpoints bug after integration testing
