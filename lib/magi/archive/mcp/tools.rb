@@ -931,7 +931,6 @@ module Magi
             end
           end.join
         end
-      end
 
       # === Weekly Summary Operations ===
 
@@ -1286,6 +1285,7 @@ module Magi
       rescue StandardError
         date_str
       end
-    end
-  end
-end
+    end # class Tools
+  end # module Mcp
+  end # module Archive
+end # module Magi
