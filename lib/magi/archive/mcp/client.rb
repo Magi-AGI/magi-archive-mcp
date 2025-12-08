@@ -145,6 +145,22 @@ module Magi
           JSON.parse(response.body.to_s)
         end
 
+        # Get authenticated Decko username
+        #
+        # Returns the username from the authentication response.
+        # This is the Decko username (e.g., "Nemquae"), not the system username.
+        #
+        # @return [String, nil] the Decko username, or nil if not yet authenticated
+        #
+        # @example
+        #   client.username
+        #   # => "Nemquae"
+        def username
+          # Trigger authentication if not done yet
+          auth.token unless auth.username
+          auth.username
+        end
+
         # GET request returning raw HTTP response (for file downloads)
         #
         # @param path [String] the endpoint path

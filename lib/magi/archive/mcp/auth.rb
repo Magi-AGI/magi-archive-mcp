@@ -36,7 +36,7 @@ module Magi
         # Refresh buffer: refresh token this many seconds before expiry
         REFRESH_BUFFER_SECONDS = 300
 
-        attr_reader :config
+        attr_reader :config, :username
 
         # Initialize auth handler with configuration
         #
@@ -45,6 +45,7 @@ module Magi
           @config = config
           @token = nil
           @token_expires_at = nil
+          @username = nil
           @jwks_cache = nil
           @jwks_cached_at = nil
         end
@@ -150,6 +151,7 @@ module Magi
         def clear_cache!
           @token = nil
           @token_expires_at = nil
+          @username = nil
           @jwks_cache = nil
           @jwks_cached_at = nil
         end
@@ -184,6 +186,7 @@ module Magi
           data = JSON.parse(response.body.to_s)
 
           @token = data["token"]
+          @username = data["username"] # Store Decko username from auth response
           expires_in = data["expires_in"] || 3600
           @token_expires_at = Time.now + expires_in
 
