@@ -16,10 +16,10 @@ This document tracks remaining work items and known issues after the integration
 
 ### Test Results Summary (Updated 2025-12-08)
 - **Unit Tests**: 178 passing (includes 6 new retry tests)
-- **Integration Tests**: 21 passing, 1 failing (search indexing), 1 pending
+- **Integration Tests**: ✅ 22 passing, 0 failures, 1 pending (expected)
 - **Contract Tests**: 1 passing
 - **Total**: 22 integration tests
-- **Status**: ✅ Fixed 2 major bugs (render endpoints, list_children)
+- **Status**: ✅ ALL TESTS PASSING - Fixed 3 bugs (render, list_children, search)
 
 ## 🔴 Critical Server Bugs (Blocking)
 
@@ -66,15 +66,15 @@ This document tracks remaining work items and known issues after the integration
 2. Create `spec/integration_ci/` with always-run tests
 3. Add make task: `make integration-test`
 
-### Issue #3: Search Indexing Delay
-**Status**: INVESTIGATING - Test reveals possible issue
-**Impact**: Newly created cards not immediately searchable by content
+### Issue #3: Search Test ✅ FIXED
+**Status**: ✅ FIXED - Test was using wrong search mode
+**Root Cause**: Test was using default name search instead of content search
 **Details**:
-- Test creates cards with keyword "xylophone"
-- Search returns 0 results instead of expected 2
-- Could be indexing delay OR indexing not working
-**Test Location**: `spec/integration/full_api_integration_spec.rb:327`
-**Action**: Investigate if this is expected behavior or a bug
+- Test searched for "xylophone" in card content
+- But default search_in is "name" for performance
+- Fixed by adding `search_in: "content"` parameter
+**Test Location**: `spec/integration/full_api_integration_spec.rb:339`
+**Lesson**: Always specify search_in when searching content
 
 ## 📋 Missing Integration Test Coverage
 
