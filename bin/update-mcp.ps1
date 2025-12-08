@@ -188,8 +188,8 @@ function Update-Claude {
         $serverPath = Join-Path $ProjectRoot "bin\mcp-server"
         $gemfile = Join-Path $ProjectRoot "Gemfile"
 
-        # Build command as array to ensure proper argument parsing
-        $claudeArgs = @(
+        # Use Start-Process to avoid exposing credentials in interactive mode
+        $argumentList = @(
             'mcp', 'add',
             '--scope', 'user',
             '--transport', 'stdio',
@@ -202,7 +202,8 @@ function Update-Claude {
             'bundle', 'exec', 'ruby', $serverPath, $env:WORKING_DIR
         )
 
-        & claude $claudeArgs
+        $process = Start-Process -FilePath "claude" -ArgumentList $argumentList -NoNewWindow -Wait -PassThru
+        $LASTEXITCODE = $process.ExitCode
 
         if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput Green "[+] Claude CLI updated successfully"
