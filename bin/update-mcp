@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# frozen_string_literal: true
 
 # Quick MCP Server Update Utility
 # Updates Magi Archive MCP server for Codex and/or Claude Desktop
