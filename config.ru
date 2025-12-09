@@ -120,5 +120,13 @@ end
 
 MagiArchiveMcpApp.mcp_server_instance = mcp_server
 
+# Debug: Print middleware stack
+puts "=" * 80
+puts "MIDDLEWARE STACK:"
+MagiArchiveMcpApp.middleware.each_with_index do |middleware, i|
+  puts "  #{i}. #{middleware.first} #{middleware[1..-1].inspect}"
+end
+puts "=" * 80
+
 # Run the app with ZERO middleware except what Sinatra::Base requires
 run MagiArchiveMcpApp
