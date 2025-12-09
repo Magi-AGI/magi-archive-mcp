@@ -22,3 +22,4 @@ gem "mcp", "~> 0.4.0"
 # HTTP/SSE transport for remote MCP access
 gem "sinatra", "~> 4.0"
 gem "puma", "~> 6.0"
+gem "rackup", "~> 2.2"
