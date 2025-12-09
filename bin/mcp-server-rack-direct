@@ -31,6 +31,10 @@ mcp_server = ::MCP::Server.new(
   name: "magi-archive",
   version: Magi::Archive::Mcp::VERSION,
   tools: [
+    # ChatGPT connector-compatible tools (must be first for OpenAI compatibility)
+    Magi::Archive::Mcp::Server::Tools::Search,
+    Magi::Archive::Mcp::Server::Tools::Fetch,
+    # Full MCP tools
     Magi::Archive::Mcp::Server::Tools::GetCard,
     Magi::Archive::Mcp::Server::Tools::SearchCards,
     Magi::Archive::Mcp::Server::Tools::CreateCard,
