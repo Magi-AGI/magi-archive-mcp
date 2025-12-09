@@ -4,6 +4,7 @@
 # SIMPLE RACK VERSION - Testing if Sinatra is the problem
 
 require "bundler/setup"
+require "puma"
 require "rack"
 require "json"
 
@@ -13,7 +14,7 @@ app = lambda do |env|
 
   case request.path
   when "/health"
-    [200, { "Content-Type" => "application/json" }, [{ status: "healthy", version: "0.1.0", timestamp: Time.now.iso8601 }.to_json]]
+    [200, { "Content-Type" => "application/json" }, [{ status: "healthy", version: "0.1.0-RACK", timestamp: Time.now.iso8601 }.to_json]]
   when "/"
     [200, { "Content-Type" => "application/json" }, [{ name: "magi-archive-mcp-rack-test", message: "Plain Rack app - no Sinatra" }.to_json]]
   else
@@ -21,5 +22,8 @@ app = lambda do |env|
   end
 end
 
-# Run with Rack
-Rack::Handler::Puma.run(app, Host: "127.0.0.1", Port: 3002)
+# Run with Puma directly
+Puma::Server.new(app).tap do |server|
+  server.add_tcp_listener "127.0.0.1", 3002
+  server.run
+end
