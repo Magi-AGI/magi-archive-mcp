@@ -125,8 +125,10 @@ class MagiArchiveMcpApp < Sinatra::Base
   set :server, :puma
   set :quiet, true
 
-  # Store MCP server reference
-  set :mcp_server, mcp_server
+  # Store MCP server reference (will be set after class definition)
+  class << self
+    attr_accessor :mcp_server_instance
+  end
 
   # Health check endpoint (no auth required)
   get '/health' do
@@ -167,7 +169,7 @@ class MagiArchiveMcpApp < Sinatra::Base
       request_data = JSON.parse(request.body.read)
 
       # Handle MCP request through the server
-      response = settings.mcp_server.handle_request(request_data)
+      response = self.class.mcp_server_instance.handle_request(request_data)
 
       response.to_json
     rescue JSON::ParserError => e
@@ -192,13 +194,16 @@ class MagiArchiveMcpApp < Sinatra::Base
         sse: "/sse",
         message: "/message"
       },
-      tools_count: settings.mcp_server.tools.length
+      tools_count: self.class.mcp_server_instance.tools.length
     }.to_json
   end
 
   # Start the server
   run! if app_file == $0
 end
+
+# Set MCP server instance on the app class
+MagiArchiveMcpApp.mcp_server_instance = mcp_server
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
