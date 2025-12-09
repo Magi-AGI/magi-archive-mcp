@@ -121,11 +121,17 @@ mcp_server = ::MCP::Server.new(
 # Define Sinatra application class
 class MagiArchiveMcpApp < Sinatra::Base
   # Configure before anything else
-  set :protection, false
   set :server, :puma
   set :quiet, true
   set :port, PORT
   set :bind, HOST
+
+  # Explicitly configure protection with permitted hosts for Sinatra 4.x
+  set :protection, :host_authorization => { :permitted_hosts => [
+    'mcp.magi-agi.org',
+    'localhost',
+    '127.0.0.1'
+  ]}
 
   # Store MCP server reference (will be set after class definition)
   class << self
