@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Run Puma directly without rackup to avoid automatic middleware loading
+
+require 'bundler/setup'
+require 'puma'
+require_relative '../config.ru'
+
+# Get configuration from environment
+PORT = ENV.fetch("MCP_SERVER_PORT", "3002").to_i
+HOST = ENV.fetch("MCP_SERVER_HOST", "127.0.0.1")
+
+# Run Puma directly with our Rack app
+Puma::Server.new(MagiArchiveMcpApp).tap do |server|
+  server.add_tcp_listener HOST, PORT
+  puts "Magi Archive MCP Server (Puma Direct)"
+  puts "Listening on http://#{HOST}:#{PORT}"
+  server.run.join
+end
