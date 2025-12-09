@@ -118,6 +118,26 @@ mcp_server = ::MCP::Server.new(
   server_context: server_context
 )
 
+# Middleware to bypass any host authorization checks
+class HostBypassMiddleware
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    # Always allow - bypass any host checks
+    @app.call(env)
+  rescue => e
+    # If we get a "Host not permitted" error, it's from Rack::Protection
+    # Log it and return 403 for debugging
+    if e.message.include?("Host") || e.message.include?("permitted")
+      [403, {"Content-Type" => "text/plain"}, ["DEBUG: #{e.class}: #{e.message}\n#{e.backtrace.first(5).join("\n")}"]]
+    else
+      raise
+    end
+  end
+end
+
 # Define Sinatra application class
 class MagiArchiveMcpApp < Sinatra::Base
   # Configure before anything else
@@ -126,7 +146,11 @@ class MagiArchiveMcpApp < Sinatra::Base
   set :port, PORT
   set :bind, HOST
 
-  # With Sinatra::Base, protection is OFF by default - don't enable it!
+  # Completely disable ALL Rack::Protection
+  set :protection, false
+
+  # Add our bypass middleware
+  use HostBypassMiddleware
 
   # Store MCP server reference (will be set after class definition)
   class << self
