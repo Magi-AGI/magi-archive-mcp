@@ -124,10 +124,9 @@ set :bind, HOST
 set :server, :puma
 set :quiet, true
 
-# Allow requests from mcp.magi-agi.org domain
-set :protection, except: [:host_authorization]
-# Or alternatively, allow specific hosts:
-# set :protection, host_authorization: { permitted_hosts: ['mcp.magi-agi.org', 'localhost', '127.0.0.1'] }
+# Disable Rack::Protection for public MCP access
+# In production, you may want to selectively disable only host_authorization
+set :protection, false
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
