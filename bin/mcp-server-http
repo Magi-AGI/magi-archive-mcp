@@ -120,10 +120,12 @@ mcp_server = ::MCP::Server.new(
 
 # Define Sinatra application class
 class MagiArchiveMcpApp < Sinatra::Base
-  # Disable all Rack::Protection (temporarily for debugging)
+  # Configure before anything else
   set :protection, false
   set :server, :puma
   set :quiet, true
+  set :port, PORT
+  set :bind, HOST
 
   # Store MCP server reference (will be set after class definition)
   class << self
@@ -213,4 +215,4 @@ puts "Working directory: #{working_directory}"
 puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
 
 # Start the Sinatra app
-MagiArchiveMcpApp.run! host: HOST, port: PORT
+MagiArchiveMcpApp.run!
