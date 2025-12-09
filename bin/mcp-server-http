@@ -9,7 +9,7 @@
 
 require "bundler/setup"
 require "mcp"
-require "sinatra"
+require "sinatra/base"
 require "json"
 require_relative "../lib/magi/archive/mcp"
 
@@ -118,15 +118,86 @@ mcp_server = ::MCP::Server.new(
   server_context: server_context
 )
 
-# Configure Sinatra
-configure do
-  set :port, PORT
-  set :bind, HOST
+# Define Sinatra application class
+class MagiArchiveMcpApp < Sinatra::Base
+  # Disable all Rack::Protection (temporarily for debugging)
+  set :protection, false
   set :server, :puma
   set :quiet, true
 
-  # TEMPORARY: Completely disable protection for debugging
-  disable :protection
+  # Store MCP server reference
+  set :mcp_server, mcp_server
+
+  # Health check endpoint (no auth required)
+  get '/health' do
+    content_type :json
+    {
+      status: "healthy",
+      version: Magi::Archive::Mcp::VERSION,
+      timestamp: Time.now.iso8601
+    }.to_json
+  end
+
+  # SSE endpoint for MCP communication
+  get '/sse' do
+    content_type 'text/event-stream'
+    stream(:keep_open) do |out|
+      # MCP SSE transport implementation
+      # This follows the MCP SSE specification
+
+      # Send initial connection event
+      out << "event: endpoint\n"
+      out << "data: /message\n\n"
+
+      # Keep connection alive
+      Thread.new do
+        loop do
+          sleep 30
+          out << ": keepalive\n\n" rescue break
+        end
+      end
+    end
+  end
+
+  # Message endpoint for MCP requests
+  post '/message' do
+    content_type :json
+
+    begin
+      request_data = JSON.parse(request.body.read)
+
+      # Handle MCP request through the server
+      response = settings.mcp_server.handle_request(request_data)
+
+      response.to_json
+    rescue JSON::ParserError => e
+      status 400
+      { error: "Invalid JSON", message: e.message }.to_json
+    rescue StandardError => e
+      status 500
+      { error: "Server error", message: e.message }.to_json
+    end
+  end
+
+  # Root endpoint - server info
+  get '/' do
+    content_type :json
+    {
+      name: "magi-archive-mcp",
+      version: Magi::Archive::Mcp::VERSION,
+      protocol: "mcp",
+      transport: "http/sse",
+      endpoints: {
+        health: "/health",
+        sse: "/sse",
+        message: "/message"
+      },
+      tools_count: settings.mcp_server.tools.length
+    }.to_json
+  end
+
+  # Start the server
+  run! if app_file == $0
 end
 
 # Log startup
@@ -136,70 +207,5 @@ puts "Listening on #{HOST}:#{PORT}"
 puts "Working directory: #{working_directory}"
 puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
 
-# Health check endpoint (no auth required)
-get '/health' do
-  content_type :json
-  {
-    status: "healthy",
-    version: Magi::Archive::Mcp::VERSION,
-    timestamp: Time.now.iso8601
-  }.to_json
-end
-
-# SSE endpoint for MCP communication
-get '/sse' do
-  content_type 'text/event-stream'
-  stream(:keep_open) do |out|
-    # MCP SSE transport implementation
-    # This follows the MCP SSE specification
-
-    # Send initial connection event
-    out << "event: endpoint\n"
-    out << "data: /message\n\n"
-
-    # Keep connection alive
-    Thread.new do
-      loop do
-        sleep 30
-        out << ": keepalive\n\n" rescue break
-      end
-    end
-  end
-end
-
-# Message endpoint for MCP requests
-post '/message' do
-  content_type :json
-
-  begin
-    request_data = JSON.parse(request.body.read)
-
-    # Handle MCP request through the server
-    response = mcp_server.handle_request(request_data)
-
-    response.to_json
-  rescue JSON::ParserError => e
-    status 400
-    { error: "Invalid JSON", message: e.message }.to_json
-  rescue StandardError => e
-    status 500
-    { error: "Server error", message: e.message }.to_json
-  end
-end
-
-# Root endpoint - server info
-get '/' do
-  content_type :json
-  {
-    name: "magi-archive-mcp",
-    version: Magi::Archive::Mcp::VERSION,
-    protocol: "mcp",
-    transport: "http/sse",
-    endpoints: {
-      health: "/health",
-      sse: "/sse",
-      message: "/message"
-    },
-    tools_count: mcp_server.tools.length
-  }.to_json
-end
+# Start the Sinatra app
+MagiArchiveMcpApp.run! host: HOST, port: PORT
