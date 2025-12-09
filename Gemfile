@@ -18,3 +18,7 @@ gem "rubocop", "~> 1.21"
 
 # MCP Server
 gem "mcp", "~> 0.4.0"
+
+# HTTP/SSE transport for remote MCP access
+gem "sinatra", "~> 4.0"
+gem "puma", "~> 6.0"
