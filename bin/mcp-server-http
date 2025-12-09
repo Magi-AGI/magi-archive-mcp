@@ -124,15 +124,13 @@ set :bind, HOST
 set :server, :puma
 set :quiet, true
 
-# Configure Rack::Protection with explicit allowed hosts
+# Configure Rack::Protection - disable HostAuthorization since we're behind Cloudflare
+set :protection, except: :host_authorization
+
+# Manually add other protections
 use Rack::Protection::JsonCsrf
 use Rack::Protection::RemoteToken
 use Rack::Protection::SessionHijacking, tracking: true
-use Rack::Protection::HostAuthorization, :allowed_hosts => [
-  'mcp.magi-agi.org',
-  'localhost',
-  '127.0.0.1'
-]
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
