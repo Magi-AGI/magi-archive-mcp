@@ -126,12 +126,7 @@ class MagiArchiveMcpApp < Sinatra::Base
   set :port, PORT
   set :bind, HOST
 
-  # Explicitly configure protection with permitted hosts for Sinatra 4.x
-  set :protection, :host_authorization => { :permitted_hosts => [
-    'mcp.magi-agi.org',
-    'localhost',
-    '127.0.0.1'
-  ]}
+  # With Sinatra::Base, protection is OFF by default - don't enable it!
 
   # Store MCP server reference (will be set after class definition)
   class << self
@@ -220,5 +215,5 @@ puts "Listening on #{HOST}:#{PORT}"
 puts "Working directory: #{working_directory}"
 puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
 
-# Start the Sinatra app
-MagiArchiveMcpApp.run!
+# Start the Sinatra app (only if run directly, not via rackup)
+MagiArchiveMcpApp.run! if __FILE__ == $0
