@@ -124,13 +124,15 @@ set :bind, HOST
 set :server, :puma
 set :quiet, true
 
-# Configure Rack::Protection to allow mcp.magi-agi.org
-# Sinatra 4.0 uses different protection middleware
+# Configure Rack::Protection with explicit allowed hosts
 use Rack::Protection::JsonCsrf
 use Rack::Protection::RemoteToken
 use Rack::Protection::SessionHijacking, tracking: true
-# Skip HostAuthorization entirely since we're behind Cloudflare proxy
-# The Host header will always be mcp.magi-agi.org from external requests
+use Rack::Protection::HostAuthorization, :allowed_hosts => [
+  'mcp.magi-agi.org',
+  'localhost',
+  '127.0.0.1'
+]
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
