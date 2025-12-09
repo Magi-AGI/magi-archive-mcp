@@ -73,6 +73,17 @@ class MagiArchiveMcpApp < Sinatra::Base
     }.to_json
   end
 
+  get '/debug-headers' do
+    content_type :json
+    {
+      http_host: request.env['HTTP_HOST'],
+      server_name: request.env['SERVER_NAME'],
+      server_port: request.env['SERVER_PORT'],
+      http_x_forwarded_host: request.env['HTTP_X_FORWARDED_HOST'],
+      all_http_headers: request.env.select { |k,v| k.start_with?('HTTP_') }
+    }.to_json
+  end
+
   get '/sse' do
     content_type 'text/event-stream'
     stream(:keep_open) do |out|
