@@ -99,7 +99,7 @@ module Magi
               # mcp gem 0.4.0 made handle_request private, so we route directly
               method = request_data['method']
 
-              response = case method
+              result = case method
               when 'initialize'
                 self.class.mcp_server_instance.send(:init, request_data)
               when 'tools/list'
@@ -115,9 +115,16 @@ module Magi
               when 'prompts/get'
                 self.class.mcp_server_instance.send(:get_prompt, request_data)
               when 'ping'
-                { jsonrpc: '2.0', id: request_data['id'], result: {} }
+                {}
               else
+                nil
+              end
+
+              # Wrap result in JSON-RPC envelope
+              response = if result.nil?
                 { jsonrpc: '2.0', id: request_data['id'], error: { code: -32601, message: "Method not found: #{method}" } }
+              else
+                { jsonrpc: '2.0', id: request_data['id'], result: result }
               end
 
               [200, { 'Content-Type' => 'application/json' }, [JSON.generate(response)]]
