@@ -124,13 +124,8 @@ set :bind, HOST
 set :server, :puma
 set :quiet, true
 
-# Configure Rack::Protection - disable HostAuthorization since we're behind Cloudflare
-set :protection, except: :host_authorization
-
-# Manually add other protections
-use Rack::Protection::JsonCsrf
-use Rack::Protection::RemoteToken
-use Rack::Protection::SessionHijacking, tracking: true
+# TEMPORARY: Completely disable protection for debugging
+set :protection, false
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
