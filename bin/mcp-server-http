@@ -119,13 +119,15 @@ mcp_server = ::MCP::Server.new(
 )
 
 # Configure Sinatra
-set :port, PORT
-set :bind, HOST
-set :server, :puma
-set :quiet, true
+configure do
+  set :port, PORT
+  set :bind, HOST
+  set :server, :puma
+  set :quiet, true
 
-# TEMPORARY: Completely disable protection for debugging
-set :protection, false
+  # TEMPORARY: Completely disable protection for debugging
+  disable :protection
+end
 
 # Log startup
 puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
