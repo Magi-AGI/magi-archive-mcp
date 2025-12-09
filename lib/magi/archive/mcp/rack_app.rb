@@ -88,7 +88,9 @@ module Magi
             # Return async response that will be hijacked by Puma
             [200, headers, SSEStreamer.new]
 
-          when ['POST', '/message']
+          when ['POST', '/sse'], ['POST', '/message']
+            # Handle MCP messages on both /sse and /message endpoints
+            # ChatGPT posts to /sse, other clients may use /message
             begin
               body = request.body.read
               request_data = JSON.parse(body)
