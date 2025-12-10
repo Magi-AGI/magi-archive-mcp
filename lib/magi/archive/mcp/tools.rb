@@ -1075,6 +1075,11 @@ module Magi
         # @example Encode special characters
         #   tools.encode_card_name("Test & Special / Characters")
         #   # => "Test%20%26%20Special%20%2F%20Characters"
+        # Normalize card name to Decko format (spaces to underscores)
+        def normalize_card_name(name)
+          name.gsub(" ", "_")
+        end
+
         def encode_card_name(name)
           # Encode all characters except: A-Z a-z 0-9 - _ . ~ +
           # Keep + literal for Decko compound cards (e.g., "Parent+Child")
