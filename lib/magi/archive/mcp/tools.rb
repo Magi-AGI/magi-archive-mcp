@@ -1761,7 +1761,8 @@ module Magi
               "Virtual cards: Empty junction cards that exist for naming - actual content is in compound child cards",
               "Pointer cards: Contain references to other cards (use list_children to see them)",
               "Search cards: Content shows query, results are dynamic",
-              "+GM+AI cards: Look for these in sections for AI-specific instructions and context"
+              "+GM+AI cards: Look for these in sections for AI-specific instructions and context",
+              "Deleted cards: Marked as trash in database, filtered from normal results. To restore: create new card with same name, then access history tab on wiki to restore previous content (no automated API yet)"
             ],
 
             best_practices: [
