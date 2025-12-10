@@ -35,7 +35,7 @@ RSpec.describe "Utility Operations Integration", :integration do
 
       it "handles query filters during fetch" do
         cards = []
-        tools.fetch_all_cards(query: "Test", limit: 5) do |card|
+        tools.fetch_all_cards(q: "Test", limit: 5) do |card|
           cards << card
         end
 
@@ -211,7 +211,7 @@ RSpec.describe "Utility Operations Integration", :integration do
 
     it "handles pagination with no results" do
       cards = []
-      tools.fetch_all_cards(query: "NonExistentQuery#{Time.now.to_i}", limit: 5) do |card|
+      tools.fetch_all_cards(q: "NonExistentQuery#{Time.now.to_i}", limit: 5) do |card|
         cards << card
       end
 

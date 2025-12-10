@@ -208,7 +208,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
           headers: { "Content-Type" => "application/json" }
         )
 
-      result = tools.render_snippet(html_content, from: :html, to: :markdown)
+      result = tools.convert_content(html_content, from: :html, to: :markdown)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("markdown")
@@ -237,7 +237,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
           headers: { "Content-Type" => "application/json" }
         )
 
-      result = tools.render_snippet(markdown_content, from: :markdown, to: :html)
+      result = tools.convert_content(markdown_content, from: :markdown, to: :html)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("html")

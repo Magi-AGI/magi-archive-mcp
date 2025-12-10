@@ -688,7 +688,7 @@ RSpec.describe Magi::Archive::Mcp::Tools do
       end
 
       it "converts HTML to Markdown" do
-        result = tools.render_snippet(html_content, from: :html, to: :markdown)
+        result = tools.convert_content(html_content, from: :html, to: :markdown)
 
         expect(result).to eq(markdown_response)
       end
@@ -713,7 +713,7 @@ RSpec.describe Magi::Archive::Mcp::Tools do
       end
 
       it "converts Markdown to HTML" do
-        result = tools.render_snippet(markdown_content, from: :markdown, to: :html)
+        result = tools.convert_content(markdown_content, from: :markdown, to: :html)
 
         expect(result).to eq(html_response)
       end
@@ -722,19 +722,19 @@ RSpec.describe Magi::Archive::Mcp::Tools do
     context "with invalid formats" do
       it "raises ArgumentError for invalid from format" do
         expect do
-          tools.render_snippet("content", from: :xml, to: :markdown)
+          tools.convert_content("content", from: :xml, to: :markdown)
         end.to raise_error(ArgumentError, /Format must be/)
       end
 
       it "raises ArgumentError for invalid to format" do
         expect do
-          tools.render_snippet("content", from: :html, to: :json)
+          tools.convert_content("content", from: :html, to: :json)
         end.to raise_error(ArgumentError, /Format must be/)
       end
 
       it "raises ArgumentError when from and to are the same" do
         expect do
-          tools.render_snippet("content", from: :html, to: :html)
+          tools.convert_content("content", from: :html, to: :html)
         end.to raise_error(ArgumentError, /cannot be the same/)
       end
     end

@@ -443,7 +443,7 @@ RSpec.describe "Full API Integration", :integration do
     it "converts HTML to Markdown" do
       html_content = "<h1>Test Heading</h1><p>This is <strong>bold</strong> text.</p><ul><li>Item 1</li><li>Item 2</li></ul>"
 
-      result = tools.render_snippet(html_content, from: :html, to: :markdown)
+      result = tools.convert_content(html_content, from: :html, to: :markdown)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("markdown")
@@ -455,7 +455,7 @@ RSpec.describe "Full API Integration", :integration do
     it "converts Markdown to HTML" do
       markdown_content = "# Test Heading\n\nThis is **bold** text.\n\n- Item 1\n- Item 2"
 
-      result = tools.render_snippet(markdown_content, from: :markdown, to: :html)
+      result = tools.convert_content(markdown_content, from: :markdown, to: :html)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("html")
@@ -474,7 +474,7 @@ RSpec.describe "Full API Integration", :integration do
         </div>
       HTML
 
-      result = tools.render_snippet(complex_html, from: :html, to: :markdown)
+      result = tools.convert_content(complex_html, from: :html, to: :markdown)
 
       expect(result["markdown"]).to be_a(String)
       expect(result["markdown"]).to include("## Section")
