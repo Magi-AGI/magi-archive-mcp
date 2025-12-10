@@ -117,21 +117,36 @@ module Magi
         #
         # Automatically handles pagination and returns all matching cards.
         # Use with caution on large result sets.
+        # Optionally yields each card to a block for iteration.
         #
         # @param q [String, nil] search query
         # @param type [String, nil] filter by card type
-        # @param limit [Integer] page size for fetching (default: 50)
-        # @return [Array<Hash>] array of all matching cards
+        # @param limit [Integer] maximum total results (default: 50)
+        # @param offset [Integer] starting offset (default: 0)
+        # @yield [Hash] each card if block given
+        # @return [Array<Hash>] array of all matching cards if no block given
         #
-        # @example
+        # @example Without block
         #   all_users = tools.fetch_all_cards(type: "User")
         #   puts "Found #{all_users.length} users"
-        def fetch_all_cards(q: nil, type: nil, limit: 50)
+        #
+        # @example With block (memory efficient for large sets)
+        #   tools.fetch_all_cards(type: "User", limit: 100) do |user|
+        #     puts user["name"]
+        #   end
+        def fetch_all_cards(q: nil, type: nil, limit: 50, offset: 0, &block)
           params = {}
           params[:q] = q if q
           params[:type] = type if type
+          params[:offset] = offset if offset > 0
 
-          client.fetch_all("/cards", limit: limit, **params)
+          cards = client.fetch_all("/cards", limit: limit, **params)
+
+          if block_given?
+            cards.each(&block)
+          else
+            cards
+          end
         end
 
         # Iterate over card search results page by page
@@ -291,14 +306,28 @@ module Magi
         # Get all types
         #
         # Fetches all card types across all pages.
+        # Optionally yields each type to a block for iteration.
         #
-        # @return [Array<Hash>] array of all card types
+        # @param limit [Integer] maximum total results (default: 100)
+        # @yield [Hash] each type if block given
+        # @return [Array<Hash>] array of all card types if no block given
         #
-        # @example
+        # @example Without block
         #   all_types = tools.fetch_all_types
         #   puts "Found #{all_types.length} card types"
-        def fetch_all_types
-          client.fetch_all("/types", limit: 50)
+        #
+        # @example With block
+        #   tools.fetch_all_types(limit: 50) do |type|
+        #     puts type["name"]
+        #   end
+        def fetch_all_types(limit: 100, &block)
+          types = client.fetch_all("/types", limit: limit)
+
+          if block_given?
+            types.each(&block)
+          else
+            types
+          end
         end
 
         # Render snippet with format conversion
