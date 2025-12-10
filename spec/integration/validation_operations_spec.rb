@@ -43,9 +43,8 @@ RSpec.describe "Validation and Recommendation Operations Integration", :integrat
     describe "validate_card_structure" do
       it "validates a properly structured card" do
         result = tools.validate_card_structure(
-          type: "RichText",
-          tags: [],
-          children: []
+          "RichText",
+          children_names: []
         )
 
         expect(result).to be_a(Hash)
@@ -55,9 +54,8 @@ RSpec.describe "Validation and Recommendation Operations Integration", :integrat
       it "detects invalid card structure" do
         # Try to validate with invalid data
         result = tools.validate_card_structure(
-          type: "Article",
-          tags: ["InvalidTag#{Time.now.to_i}"],
-          children: []
+          "Article",
+          children_names: []
         )
 
         expect(result).to be_a(Hash)
@@ -66,9 +64,8 @@ RSpec.describe "Validation and Recommendation Operations Integration", :integrat
 
       it "provides validation errors when structure is invalid" do
         result = tools.validate_card_structure(
-          type: "RichText",
-          tags: [],
-          children: ["Invalid+Child+Structure"]
+          "RichText",
+          children_names: ["Invalid+Child+Structure"]
         )
 
         expect(result).to be_a(Hash)

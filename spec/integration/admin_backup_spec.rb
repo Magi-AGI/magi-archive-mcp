@@ -134,7 +134,7 @@ RSpec.describe "Admin Backup Integration", :integration do
 
       expect {
         user_tools.list_database_backups
-      }.to raise_error(Magi::Archive::Mcp::Client::AuthorizationError)
+      }.to raise_error(Magi::Archive::Mcp::Auth::AuthenticationError)
     end
 
     it "denies backup operations to gm role" do
@@ -144,7 +144,7 @@ RSpec.describe "Admin Backup Integration", :integration do
 
       expect {
         gm_tools.list_database_backups
-      }.to raise_error(Magi::Archive::Mcp::Client::AuthorizationError)
+      }.to raise_error(Magi::Archive::Mcp::Auth::AuthenticationError)
     end
   end
 end
