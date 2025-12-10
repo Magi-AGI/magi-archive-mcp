@@ -157,19 +157,31 @@ module Magi
         # @param q [String, nil] search query
         # @param type [String, nil] filter by card type
         # @param limit [Integer] page size (default: 50)
-        # @yield [Array<Hash>] each page of cards
+        # @param max_pages [Integer, nil] maximum number of pages to fetch (default: unlimited)
+        # @yield [Hash] each page response with cards array and metadata
         # @return [Enumerator] if no block given
         #
         # @example
         #   tools.each_card_page(type: "User", limit: 20) do |page|
-        #     page.each { |user| puts user["name"] }
+        #     page["cards"].each { |user| puts user["name"] }
         #   end
-        def each_card_page(q: nil, type: nil, limit: 50, &)
+        #
+        # @example With page limit
+        #   tools.each_card_page(type: "User", limit: 20, max_pages: 5) do |page|
+        #     puts "Page has #{page['cards'].length} cards"
+        #   end
+        def each_card_page(q: nil, type: nil, limit: 50, max_pages: nil, &block)
           params = {}
           params[:q] = q if q
           params[:type] = type if type
 
-          client.each_page("/cards", limit: limit, **params, &)
+          page_count = 0
+          client.each_page("/cards", limit: limit, **params) do |page|
+            page_count += 1
+            break if max_pages && page_count > max_pages
+
+            yield page if block_given?
+          end
         end
 
         # Create a new card
@@ -330,27 +342,27 @@ module Magi
           end
         end
 
-        # Render snippet with format conversion
+        # Convert content between HTML and Markdown formats
         #
-        # Converts content between HTML and Markdown formats.
+        # Converts content between HTML and Markdown using the server API.
         # Per MCP-SPEC.md lines 39-40:
         #   - HTML→Markdown: POST /api/mcp/render → returns { markdown:, format: "gfm" }
         #   - Markdown→HTML: POST /api/mcp/render/markdown → returns { html:, format: "html" }
         #
-        # @param content [String] the content to render
+        # @param content [String] the content to convert
         # @param from [Symbol] source format (:html or :markdown)
         # @param to [Symbol] target format (:html or :markdown)
         # @return [Hash] server response with markdown: or html: key
         # @raise [ArgumentError] if from/to formats are invalid or the same
         #
         # @example HTML to Markdown
-        #   result = tools.render_snippet("<p>Hello <strong>world</strong></p>", from: :html, to: :markdown)
+        #   result = tools.convert_content("<p>Hello <strong>world</strong></p>", from: :html, to: :markdown)
         #   # => { "markdown" => "Hello **world**", "format" => "gfm" }
         #
         # @example Markdown to HTML
-        #   result = tools.render_snippet("Hello **world**", from: :markdown, to: :html)
+        #   result = tools.convert_content("Hello **world**", from: :markdown, to: :html)
         #   # => { "html" => "<p>Hello <strong>world</strong></p>", "format" => "html" }
-        def render_snippet(content, from:, to:)
+        def convert_content(content, from:, to:)
           valid_formats = %i[html markdown]
           unless valid_formats.include?(from) && valid_formats.include?(to)
             raise ArgumentError, "Format must be :html or :markdown"
@@ -371,6 +383,36 @@ module Magi
           payload = { content: content }
 
           client.post(endpoint, **payload)
+        end
+
+        # Render a snippet of content with optional truncation
+        #
+        # Truncates long content to a specified length and adds ellipsis.
+        # Useful for generating previews or summaries.
+        #
+        # @param content [String] the content to truncate
+        # @param length [Integer] maximum length (default: 100)
+        # @return [String] truncated content with ellipsis if needed
+        #
+        # @example Truncate long content
+        #   snippet = tools.render_snippet("A" * 100, length: 20)
+        #   # => "AAAAAAAAAAAAAAAAAAAA..."
+        #
+        # @example Short content unchanged
+        #   snippet = tools.render_snippet("Short", length: 50)
+        #   # => "Short"
+        #
+        # @example Handle HTML content
+        #   snippet = tools.render_snippet("<p>HTML content</p>", length: 10)
+        #   # => "<p>HTML co..."
+        def render_snippet(content, length: 100)
+          return "" if content.nil? || content.empty?
+
+          if content.length <= length
+            content
+          else
+            content[0...length] + "..."
+          end
         end
 
         # Execute batch operations on multiple cards
@@ -993,8 +1035,6 @@ module Magi
           tags.uniq
         end
 
-        private
-
         # URL-encode card name for safe use in paths
         #
         # Per MCP-SPEC.md line 14: encode spaces and reserved chars, keep + literal
@@ -1002,6 +1042,18 @@ module Magi
         #
         # @param name [String] the card name
         # @return [String] URL-encoded name
+        #
+        # @example Encode spaces
+        #   tools.encode_card_name("Test Card Name")
+        #   # => "Test%20Card%20Name"
+        #
+        # @example Preserve plus for compound cards
+        #   tools.encode_card_name("Parent+Child")
+        #   # => "Parent+Child"
+        #
+        # @example Encode special characters
+        #   tools.encode_card_name("Test & Special / Characters")
+        #   # => "Test%20%26%20Special%20%2F%20Characters"
         def encode_card_name(name)
           # Encode all characters except: A-Z a-z 0-9 - _ . ~ +
           # Keep + literal for Decko compound cards (e.g., "Parent+Child")
@@ -1013,6 +1065,8 @@ module Magi
             end
           end.join
         end
+
+        private
 
       public
 
