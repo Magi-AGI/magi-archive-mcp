@@ -3,6 +3,9 @@
 require "spec_helper"
 require_relative "../support/integration_helpers"
 
+# Load MCP server tools
+Dir[File.join(__dir__, '../../lib/magi/archive/mcp/server/tools/**/*.rb')].sort.each { |f| require f }
+
 RSpec.describe "Session Improvements", :integration do
   # Integration tests for features added in recent session:
   # - Virtual card detection
