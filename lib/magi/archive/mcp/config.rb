@@ -52,10 +52,11 @@ module Magi
           base_url: "https://wiki.magi-agi.org/api/mcp",
           role: "user",
           issuer: "magi-archive",
-          jwks_cache_ttl: 3600
+          jwks_cache_ttl: 3600,
+          ssl_verify_mode: :peer  # :peer (strict), :none (disable), or OpenSSL constant
         }.freeze
 
-        attr_reader :username, :password, :api_key, :base_url, :role, :issuer, :jwks_cache_ttl, :auth_method
+        attr_reader :username, :password, :api_key, :base_url, :role, :issuer, :jwks_cache_ttl, :auth_method, :ssl_verify_mode
 
         # Initialize configuration from environment variables
         #
@@ -129,6 +130,10 @@ module Magi
           @role = ENV.fetch("MCP_ROLE", DEFAULTS[:role])
           @issuer = ENV.fetch("JWT_ISSUER", DEFAULTS[:issuer])
           @jwks_cache_ttl = ENV.fetch("JWKS_CACHE_TTL", DEFAULTS[:jwks_cache_ttl]).to_i
+
+          # SSL configuration (optional, defaults to strict peer verification)
+          ssl_mode = ENV.fetch("SSL_VERIFY_MODE", DEFAULTS[:ssl_verify_mode].to_s)
+          @ssl_verify_mode = ssl_mode == "none" ? :none : :peer
         end
 
         def determine_auth_method

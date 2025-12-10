@@ -36,7 +36,7 @@ module Magi
         # Refresh buffer: refresh token this many seconds before expiry
         REFRESH_BUFFER_SECONDS = 300
 
-        attr_reader :config
+        attr_reader :config, :username
 
         # Initialize auth handler with configuration
         #
@@ -45,6 +45,7 @@ module Magi
           @config = config
           @token = nil
           @token_expires_at = nil
+          @username = nil
           @jwks_cache = nil
           @jwks_cached_at = nil
         end
@@ -79,7 +80,8 @@ module Magi
 
           url = config.url_for("/.well-known/jwks.json")
 
-          response = HTTP.get(url)
+          http_client = configure_ssl(HTTP)
+          response = http_client.get(url)
 
           unless response.status.success?
             raise JWKSError,
@@ -150,6 +152,7 @@ module Magi
         def clear_cache!
           @token = nil
           @token_expires_at = nil
+          @username = nil
           @jwks_cache = nil
           @jwks_cached_at = nil
         end
@@ -169,7 +172,8 @@ module Magi
           url = config.url_for("/auth")
           payload = config.auth_payload
 
-          response = HTTP.post(
+          http_client = configure_ssl(HTTP)
+          response = http_client.post(
             url,
             json: payload,
             headers: { "Content-Type" => "application/json" }
@@ -184,6 +188,7 @@ module Magi
           data = JSON.parse(response.body.to_s)
 
           @token = data["token"]
+          @username = data["username"] # Store Decko username from auth response
           expires_in = data["expires_in"] || 3600
           @token_expires_at = Time.now + expires_in
 
@@ -230,6 +235,18 @@ module Magi
 
           # Decode
           Base64.strict_decode64(str)
+        end
+
+        # Configure SSL settings for HTTP client
+        def configure_ssl(http_client)
+          if config.ssl_verify_mode == :none
+            # Disable SSL verification (not recommended for production)
+            require "openssl"
+            http_client.via(:ssl_context, OpenSSL::SSL::VERIFY_NONE)
+          else
+            # Use default strict verification
+            http_client
+          end
         end
       end
     end

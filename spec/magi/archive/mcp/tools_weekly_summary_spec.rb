@@ -15,6 +15,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
 
     allow_any_instance_of(Magi::Archive::Mcp::Client).to receive(:base_url).and_return(base_url)
     allow_any_instance_of(Magi::Archive::Mcp::Auth).to receive(:token).and_return(valid_token)
+    allow_any_instance_of(Magi::Archive::Mcp::Auth).to receive(:username).and_return("TestUser")
   end
 
   after do
@@ -335,63 +336,109 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "creates a weekly summary card" do
+      # Stub the TOC card fetch (doesn't exist yet)
+      stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      # Stub TOC update attempt (will fail, then fall back to create)
+      stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      # Stub the card creation
       stub_request(:post, "#{base_url}/cards")
         .with(
           headers: { "Authorization" => "Bearer #{valid_token}" },
           body: hash_including(
-            "name" => /Weekly Work Summary \d{4} \d{2} \d{2}/,
-            "type" => "Basic"
+            "name" => /Weekly Work Summaries\+\d{4} \d{2} \d{2} - TestUser/,
+            "type" => "RichText"
           )
         )
         .to_return(
           status: 201,
           body: {
-            name: "Weekly Work Summary 2025 12 03",
+            name: "Weekly Work Summaries+2025 12 03 - TestUser",
             id: 999,
-            type: "Basic",
+            type: "RichText",
             content: "Summary content"
+          }.to_json
+        )
+
+      # Stub the TOC creation (happens after main card creation)
+      stub_request(:post, "#{base_url}/cards")
+        .with(
+          headers: { "Authorization" => "Bearer #{valid_token}" },
+          body: hash_including(
+            "name" => "Weekly Work Summaries+table-of-contents",
+            "type" => "RichText"
+          )
+        )
+        .to_return(
+          status: 201,
+          body: {
+            name: "Weekly Work Summaries+table-of-contents",
+            id: 1000,
+            type: "RichText"
           }.to_json
         )
 
       result = tools.create_weekly_summary
 
       expect(result).to be_a(Hash)
-      expect(result["name"]).to match(/Weekly Work Summary/)
+      expect(result["name"]).to match(/Weekly Work Summaries\+/)
     end
 
     it "supports custom date" do
-      # Username will default to ENV["USER"] or ENV["USERNAME"]
-      username = ENV["USER"] || ENV["USERNAME"] || "Unknown User"
+      # Stub TOC operations
+      stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
 
       stub_request(:post, "#{base_url}/cards")
-        .with(body: hash_including("name" => /Weekly Work Summary 2025 12 09 - /))
         .to_return(
           status: 201,
-          body: { name: "Weekly Work Summary 2025 12 09 - #{username}", id: 999, type: "Basic" }.to_json
+          body: { name: "Weekly Work Summaries+2025 12 09 - TestUser", id: 999, type: "RichText" }.to_json
         )
 
       result = tools.create_weekly_summary(date: "2025 12 09")
 
-      expect(result["name"]).to eq("Weekly Work Summary 2025 12 09 - #{username}")
+      expect(result["name"]).to eq("Weekly Work Summaries+2025 12 09 - TestUser")
     end
 
     it "supports custom executive summary" do
       custom_summary = "Focused on Phase 2.1 completion."
 
+      # Stub TOC operations
+      stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      # Stub any POST request (both main card and TOC)
       stub_request(:post, "#{base_url}/cards")
-        .with(body: hash_including("content" => /Focused on Phase 2\.1 completion/))
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
 
       tools.create_weekly_summary(executive_summary: custom_summary)
 
+      # Verify the main card was created with the custom summary
       expect(WebMock).to have_requested(:post, "#{base_url}/cards")
+        .with(body: hash_including("content" => /Focused on Phase 2\.1 completion/))
     end
 
     it "scans repositories from specified base path" do
       expect(tools).to receive(:scan_git_repos).with(base_path: "/custom/path", days: 7)
 
+      # Stub TOC operations
+      stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
       stub_request(:post, "#{base_url}/cards")
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
 
       tools.create_weekly_summary(base_path: "/custom/path")
     end
@@ -399,8 +446,15 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     it "supports custom lookback period" do
       expect(tools).to receive(:get_recent_changes).with(days: 14)
 
+      # Stub TOC operations
+      stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
+      stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
+        .to_return(status: 404, body: { error: "not_found" }.to_json)
+
       stub_request(:post, "#{base_url}/cards")
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Basic" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
 
       tools.create_weekly_summary(days: 14)
     end

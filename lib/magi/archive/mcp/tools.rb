@@ -1160,13 +1160,16 @@ module Magi
       # @example Generate content without creating card
       #   markdown = tools.create_weekly_summary(create_card: false)
       #   puts markdown
-      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Home", create_card: true, username: nil)
-        # Get username from environment if not provided
-        username ||= ENV["USER"] || ENV["USERNAME"] || "Unknown User"
+      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Weekly Work Summaries", create_card: true, username: nil)
+        # Get username from Decko authentication if not provided
+        username ||= client.username || "Unknown User"
 
         # Get date string for card name
         date_str = date || Time.now.strftime("%Y %m %d")
-        card_name = "Weekly Work Summary #{date_str} - #{username}"
+
+        # Make this a child of the parent card using "+" notation
+        # e.g., "Weekly Work Summaries+2025 12 08 - Nemquae"
+        card_name = "#{parent}+#{date_str} - #{username}"
 
         # Fetch recent changes
         card_changes = get_recent_changes(days: days)
@@ -1176,32 +1179,22 @@ module Magi
         content = format_weekly_summary(
           card_changes,
           repo_changes,
-          title: card_name,
+          title: "Weekly Work Summary #{date_str} - #{username}",
           executive_summary: executive_summary
         )
 
         # Return content only if requested
         return content unless create_card
 
-        # Create the card
+        # Create the card as a child of the parent
         card = self.create_card(
           card_name,
           content: content,
           type: "RichText"
         )
 
-        # Add to parent hierarchy if specified
-        if parent
-          begin
-            # Get parent card to verify it exists
-            parent_card = get_card(parent)
-
-            # Create a link in the parent card (simplified approach)
-            # Could enhance this to add to a specific section
-          rescue Client::NotFoundError
-            # Parent doesn't exist, that's okay
-          end
-        end
+        # Add to table of contents
+        update_weekly_summaries_toc(card_name, date_str, username)
 
         card
       end
@@ -1341,6 +1334,55 @@ module Magi
         Time.parse(date_str).strftime("%Y-%m-%d")
       rescue StandardError
         date_str
+      end
+
+      # Update the Weekly Work Summaries table of contents
+      #
+      # Adds a link to a newly created weekly summary to the TOC card.
+      # Creates the TOC card if it doesn't exist.
+      #
+      # @param card_name [String] the full card name (e.g., "Weekly Work Summaries+2025 12 08 - Nemquae")
+      # @param date_str [String] the date string (e.g., "2025 12 08")
+      # @param username [String] the username (e.g., "Nemquae")
+      def update_weekly_summaries_toc(card_name, date_str, username)
+        toc_card_name = "Weekly Work Summaries+table-of-contents"
+
+        # Try to fetch existing TOC
+        begin
+          toc = get_card(toc_card_name)
+          content = toc["content"] || ""
+        rescue Client::NotFoundError
+          # TOC doesn't exist, create it with header
+          content = "# Weekly Work Summaries - Table of Contents\n\n"
+          content += "This page lists all weekly work summaries.\n\n"
+        end
+
+        # Add the new entry at the top (most recent first)
+        # Format: [[_L+Weekly Work Summary DATE - USER|Weekly Work Summary DATE - USER]]
+        # Extract just the date and username part after the parent card name
+        display_name = card_name.sub(/^Weekly Work Summaries\+/, "Weekly Work Summary ")
+        new_entry = "- [[_L+#{display_name}|#{display_name}]]\n"
+
+        # Check if this entry already exists
+        return if content.include?(new_entry)
+
+        # Insert after the header/description
+        lines = content.lines
+        insert_index = lines.index { |line| line.start_with?("- [[") } || lines.size
+
+        lines.insert(insert_index, new_entry)
+        updated_content = lines.join
+
+        # Update or create the TOC card
+        begin
+          update_card(toc_card_name, content: updated_content)
+        rescue Client::NotFoundError
+          # Create the TOC card
+          create_card(toc_card_name, content: updated_content, type: "RichText")
+        end
+      rescue StandardError => e
+        # Log error but don't fail the whole operation
+        warn "Failed to update TOC: #{e.message}"
       end
     end # class Tools
   end # module Mcp

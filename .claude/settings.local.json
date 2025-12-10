@@ -21,7 +21,8 @@
       "Bash(gem list:*)",
       "WebFetch(domain:github.com)",
       "Bash(gh --version:*)",
-      "Bash(bundle exec rspec:*)"
+      "Bash(bundle exec rspec:*)",
+      "Bash(scp:*)"
     ],
     "deny": [],
     "ask": []

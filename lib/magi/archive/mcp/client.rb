@@ -114,7 +114,8 @@ module Magi
         #   # => { "status" => "healthy", "timestamp" => "2025-12-07T...", "checks" => {...} }
         def health_check
           url = config.url_for("/health")
-          response = HTTP.get(url)
+          http_client = configure_ssl(HTTP)
+          response = http_client.get(url)
 
           unless response.status.success?
             raise APIError.new("Health check failed", status: response.code)
@@ -136,13 +137,30 @@ module Magi
         #   # => { "status" => "ok", "timestamp" => "2025-12-07T..." }
         def ping
           url = config.url_for("/health/ping")
-          response = HTTP.get(url)
+          http_client = configure_ssl(HTTP)
+          response = http_client.get(url)
 
           unless response.status.success?
             raise APIError.new("Ping failed", status: response.code)
           end
 
           JSON.parse(response.body.to_s)
+        end
+
+        # Get authenticated Decko username
+        #
+        # Returns the username from the authentication response.
+        # This is the Decko username (e.g., "Nemquae"), not the system username.
+        #
+        # @return [String, nil] the Decko username, or nil if not yet authenticated
+        #
+        # @example
+        #   client.username
+        #   # => "Nemquae"
+        def username
+          # Trigger authentication if not done yet
+          auth.token unless auth.username
+          auth.username
         end
 
         # GET request returning raw HTTP response (for file downloads)
@@ -159,7 +177,9 @@ module Magi
             "Authorization" => "Bearer #{token}"
           }
 
-          response = HTTP.headers(headers).get(url, params: params)
+          http_client = HTTP.headers(headers)
+          http_client = configure_ssl(http_client)
+          response = http_client.get(url, params: params)
 
           # Check for errors but return raw response
           case response.code
@@ -250,15 +270,19 @@ module Magi
             "Content-Type" => "application/json"
           }
 
+          # Configure HTTP client with SSL settings
+          http_client = HTTP.headers(headers)
+          http_client = configure_ssl(http_client)
+
           response = case method
                      when :get
-                       HTTP.headers(headers).get(url, params: params)
+                       http_client.get(url, params: params)
                      when :post
-                       HTTP.headers(headers).post(url, json: json)
+                       http_client.post(url, json: json)
                      when :patch
-                       HTTP.headers(headers).patch(url, json: json)
+                       http_client.patch(url, json: json)
                      when :delete
-                       HTTP.headers(headers).delete(url)
+                       http_client.delete(url)
                      else
                        raise ArgumentError, "Unsupported HTTP method: #{method}"
                      end
@@ -366,6 +390,18 @@ module Magi
         def calculate_retry_delay(retry_count)
           # Exponential backoff: 1s, 2s, 4s
           2**retry_count
+        end
+
+        # Configure SSL settings for HTTP client
+        def configure_ssl(http_client)
+          if config.ssl_verify_mode == :none
+            # Disable SSL verification (not recommended for production)
+            require "openssl"
+            http_client.via(:ssl_context, OpenSSL::SSL::VERIFY_NONE)
+          else
+            # Use default strict verification
+            http_client
+          end
         end
       end
     end
