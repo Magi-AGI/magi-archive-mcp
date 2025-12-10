@@ -11,6 +11,11 @@ module Magi
           class RenderContent < ::MCP::Tool
             description "Convert content between HTML and Markdown formats"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 content: {

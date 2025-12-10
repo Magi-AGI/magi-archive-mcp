@@ -11,6 +11,11 @@ module Magi
           class GetRecommendations < ::MCP::Tool
             description "Get structure recommendations and improvement suggestions for cards"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 operation: {

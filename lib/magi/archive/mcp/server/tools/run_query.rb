@@ -15,6 +15,11 @@ module Magi
 
             description "Run safe CQL (Card Query Language) queries with enforced limits. Supports searching by name, type, content, and dates."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 query: {

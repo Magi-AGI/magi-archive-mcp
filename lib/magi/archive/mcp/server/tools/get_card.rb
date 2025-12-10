@@ -12,6 +12,11 @@ module Magi
           class GetCard < ::MCP::Tool
             description "Get a single card by name from the Magi Archive wiki"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 name: {

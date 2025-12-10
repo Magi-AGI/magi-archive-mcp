@@ -11,6 +11,11 @@ module Magi
           class GetTags < ::MCP::Tool
             description "Get all tags in the system or tags for a specific card"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 card_name: {

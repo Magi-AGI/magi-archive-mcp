@@ -14,6 +14,11 @@ module Magi
             Client = Magi::Archive::Mcp::Client
             description "Search for cards in the Magi Archive wiki by query, type, or other filters. Supports searching in card names, content, or both."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 query: {

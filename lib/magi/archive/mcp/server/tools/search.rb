@@ -13,6 +13,11 @@ module Magi
           class Search < ::MCP::Tool
             description "Search the Magi Archive wiki for relevant cards. Returns a list of search results with IDs, titles, and URLs for citation."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 query: {

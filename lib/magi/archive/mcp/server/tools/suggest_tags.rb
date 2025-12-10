@@ -11,6 +11,11 @@ module Magi
           class SuggestTags < ::MCP::Tool
             description "Suggest relevant tags for a card based on its content, name, and type. Useful for maintaining consistent tagging across the wiki."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 card_name: {
