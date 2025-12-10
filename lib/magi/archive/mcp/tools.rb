@@ -645,14 +645,15 @@ module Magi
         # @param tag_name [String] the tag to search for
         # @param limit [Integer] maximum results (default: 50)
         # @param offset [Integer] starting offset (default: 0)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching the tag
         #
         # @example
         #   results = tools.search_by_tag("Article")
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tag(tag_name, limit: 50, offset: 0)
           # Search for cards with +tags subcard containing the tag
-          search_cards(q: "tags:#{tag_name}", limit: limit, offset: offset)
+          result = search_cards(q: "tags:#{tag_name}", limit: limit, offset: offset)
+          result["cards"] || []
         end
 
         # Search cards by multiple tags (AND logic)
@@ -662,15 +663,16 @@ module Magi
         # @param tags [Array<String>] tags to search for
         # @param limit [Integer] maximum results (default: 50)
         # @param offset [Integer] starting offset (default: 0)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching all tags
         #
         # @example
         #   results = tools.search_by_tags(["Article", "Published"])
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tags(tags, limit: 50, offset: 0)
           # Search using tag query for each tag (AND logic)
           query = tags.map { |tag| "tags:#{tag}" }.join(" AND ")
-          search_cards(q: query, limit: limit, offset: offset)
+          result = search_cards(q: query, limit: limit, offset: offset)
+          result["cards"] || []
         end
 
         # Get all tags used in the system
@@ -748,15 +750,16 @@ module Magi
         #
         # @param tags [Array<String>] tags to search for
         # @param limit [Integer] maximum results (default: 50)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching any tag
         #
         # @example
         #   results = tools.search_by_tags_any(["Article", "Draft"])
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tags_any(tags, limit: 50)
           # Search using tag query for any tag (OR logic)
           query = tags.map { |tag| "tags:#{tag}" }.join(" OR ")
-          search_cards(q: query, limit: limit)
+          result = search_cards(q: query, limit: limit)
+          result["cards"] || []
         end
 
         # === Card Relationship Operations ===
@@ -767,14 +770,15 @@ module Magi
         # Includes both explicit links [[CardName]] and nests {{CardName}}.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, referers (array), referer_count
+        # @return [Array<Hash>] array of cards that reference this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_referers("Main Page")
-        #   result["referers"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_referers(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/referers")
+          response = client.get("/cards/#{encode_card_name(card_name)}/referers")
+          response["referers"] || []
         end
 
         # Get cards that nest/include this card
@@ -782,14 +786,15 @@ module Magi
         # Returns cards that include this card using nest syntax {{CardName}}.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, nested_in (array), nested_in_count
+        # @return [Array<Hash>] array of cards that nest this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_nested_in("Template Card")
-        #   result["nested_in"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_nested_in(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/nested_in")
+          response = client.get("/cards/#{encode_card_name(card_name)}/nested_in")
+          response["nested_in"] || []
         end
 
         # Get cards that this card nests/includes
@@ -797,14 +802,15 @@ module Magi
         # Returns cards that are nested in this card using {{CardName}} syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, nests (array), nests_count
+        # @return [Array<Hash>] array of cards nested in this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_nests("Main Page")
-        #   result["nests"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_nests(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/nests")
+          response = client.get("/cards/#{encode_card_name(card_name)}/nests")
+          response["nests"] || []
         end
 
         # Get cards that this card links to
@@ -812,14 +818,15 @@ module Magi
         # Returns cards that are linked from this card using [[CardName]] syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, links (array), links_count
+        # @return [Array<Hash>] array of cards this card links to
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_links("Main Page")
-        #   result["links"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_links(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/links")
+          response = client.get("/cards/#{encode_card_name(card_name)}/links")
+          response["links"] || []
         end
 
         # Get cards that link to this card
@@ -827,14 +834,15 @@ module Magi
         # Returns cards that link to this card using [[CardName]] syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, linked_by (array), linked_by_count
+        # @return [Array<Hash>] array of cards that link to this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_linked_by("Main Page")
-        #   result["linked_by"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_linked_by(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/linked_by")
+          response = client.get("/cards/#{encode_card_name(card_name)}/linked_by")
+          response["linked_by"] || []
         end
 
         # === Admin Operations ===
