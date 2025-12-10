@@ -1407,23 +1407,24 @@ module Magi
       # @param date [String, nil] date string for card name (default: today)
       # @param executive_summary [String, nil] custom executive summary
       # @param parent [String] parent card name (default: "Home")
-      # @param create_card [Boolean] whether to create the card (default: true, false returns content only)
-      # @return [Hash, String] created card data or markdown content if create_card is false
+      # @param create_card [Boolean] whether to create the card (default: false, returns markdown for review)
+      # @return [Hash, String] created card data if create_card=true, or markdown content for preview if false
       #
-      # @example Create this week's summary
-      #   card = tools.create_weekly_summary
+      # @example Generate summary for review (default behavior)
+      #   markdown = tools.create_weekly_summary
+      #   puts markdown  # Review the content first
+      #
+      # @example Create and post summary directly
+      #   card = tools.create_weekly_summary(create_card: true)
       #
       # @example Create summary for specific period
       #   card = tools.create_weekly_summary(
       #     days: 7,
       #     date: "2025 12 09",
-      #     executive_summary: "Focused on MCP API Phase 2.1 completion..."
+      #     executive_summary: "Focused on MCP API Phase 2.1 completion...",
+      #     create_card: true  # Explicitly create the card
       #   )
-      #
-      # @example Generate content without creating card
-      #   markdown = tools.create_weekly_summary(create_card: false)
-      #   puts markdown
-      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Weekly Work Summaries", create_card: true, username: nil)
+      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Weekly Work Summaries", create_card: false, username: nil)
         # Get username from Decko authentication if not provided
         username ||= client.username || "Unknown User"
 
