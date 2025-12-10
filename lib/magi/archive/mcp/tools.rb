@@ -857,10 +857,10 @@ module Magi
           response = client.get_raw("/admin/database/backup")
 
           if save_path
-            File.write(save_path, response.body)
+            File.write(save_path, response.body.to_s)
             save_path
           else
-            response.body
+            response.body.to_s
           end
         end
 
@@ -901,10 +901,10 @@ module Magi
           response = client.get_raw("/admin/database/backup/download/#{filename}")
 
           if save_path
-            File.write(save_path, response.body)
+            File.write(save_path, response.body.to_s)
             save_path
           else
-            response.body
+            response.body.to_s
           end
         end
 
