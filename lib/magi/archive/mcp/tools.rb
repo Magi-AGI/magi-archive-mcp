@@ -138,15 +138,17 @@ module Magi
           params = {}
           params[:q] = q if q
           params[:type] = type if type
-          params[:offset] = offset if offset > 0
+
+          # Cap limit at 100 to prevent excessive fetching
+          effective_limit = [limit, 100].min
 
           # When limit is specified, collect only up to that many cards
           cards = []
-          each_card_page(**params, limit: [limit, 100].min) do |page|
+          each_card_page(**params, limit: effective_limit, offset: offset) do |page|
             page_cards = page["cards"] || []
-            remaining = limit - cards.length
+            remaining = effective_limit - cards.length
             cards.concat(page_cards.take(remaining))
-            break if cards.length >= limit
+            break if cards.length >= effective_limit
           end
 
           if block_given?
@@ -177,15 +179,15 @@ module Magi
         #   tools.each_card_page(type: "User", limit: 20, max_pages: 5) do |page|
         #     puts "Page has #{page['cards'].length} cards"
         #   end
-        def each_card_page(q: nil, type: nil, limit: 50, max_pages: nil, &block)
+        def each_card_page(q: nil, type: nil, limit: 50, offset: 0, max_pages: nil, &block)
           params = {}
           params[:q] = q if q
           params[:type] = type if type
 
           page_count = 0
-          offset = 0
+          current_offset = offset
           loop do
-            page_data = client.paginated_get("/cards", limit: limit, offset: offset, **params)
+            page_data = client.paginated_get("/cards", limit: limit, offset: current_offset, **params)
             items = page_data[:data]
 
             break if items.nil? || items.empty?
@@ -203,7 +205,7 @@ module Magi
             break if max_pages && page_count >= max_pages
 
             # Move to next page
-            offset = page_data[:next_offset] || (page_data[:offset] + items.length)
+            current_offset = page_data[:next_offset] || (page_data[:offset] + items.length)
             break if page_data[:next_offset].nil? && items.length < limit
           end
         end
