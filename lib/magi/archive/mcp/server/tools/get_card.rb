@@ -10,7 +10,7 @@ module Magi
         module Tools
           # MCP Tool for fetching a single card from the wiki
           class GetCard < ::MCP::Tool
-            description "Get a single card by name from the Magi Archive wiki"
+            description "Get a single card by name from the Magi Archive wiki. Note: Pointer cards contain references to other cards (use list_children to see them). Search cards contain dynamic queries (content shows query, not results). Use underscores for exact name matches."
 
             annotations(
               read_only_hint: true,
@@ -78,6 +78,15 @@ module Magi
                 parts << "## Content"
                 parts << ""
                 parts << (card['content'] || '(empty)')
+
+                # Add special note for Pointer and Search cards
+                if card['type'] == 'Pointer'
+                  parts << ""
+                  parts << "**Note:** This is a Pointer card. Use list_children to see referenced cards, or get_card with with_children=true."
+                elsif card['type'] == 'Search'
+                  parts << ""
+                  parts << "**Note:** This is a Search card. Content shows the search query. Results are dynamically generated when viewed on wiki."
+                end
 
                 if card['children']&.any?
                   parts << ""
