@@ -52,6 +52,7 @@ mcp_server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::AdminBackup,
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
     Magi::Archive::Mcp::Server::Tools::HealthCheck,
+    Magi::Archive::Mcp::Server::Tools::GetSiteContext,
     Magi::Archive::Mcp::Server::Tools::BatchCards,
     Magi::Archive::Mcp::Server::Tools::RunQuery,
     Magi::Archive::Mcp::Server::Tools::SpoilerScan

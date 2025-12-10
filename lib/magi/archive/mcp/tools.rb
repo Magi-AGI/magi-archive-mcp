@@ -1645,6 +1645,149 @@ module Magi
         # Log error but don't fail the whole operation
         warn "Failed to update TOC: #{e.message}"
       end
+
+      # Get site context information for AI agents
+      #
+      # Returns structured information about the wiki's hierarchy, organization,
+      # and content placement guidelines to help AI agents understand where to
+      # find content and where to place new content.
+      #
+      # @return [Hash] Site context with hierarchy, sections, and guidelines
+      #
+      # @example Get site context
+      #   context = tools.get_site_context
+      #   puts context[:hierarchy]
+      #   puts context[:guidelines]
+      def get_site_context
+        {
+          wiki_name: "Magi Archive",
+          wiki_url: "https://wiki.magi-agi.org",
+          description: "Knowledge base for Magi-AGI projects including games, business plans, AI research, and notes",
+
+          hierarchy: {
+            "Home" => {
+              description: "Main landing page with table of contents",
+              sections: [
+                "Overview",
+                "Weekly Work Summaries",
+                "Business Plan",
+                "Neoterics",
+                "Games",
+                "Notes"
+              ]
+            },
+            "Games" => {
+              description: "Game projects and worldbuilding",
+              games: [
+                {
+                  name: "Gods Game",
+                  path: "Games+Gods Game",
+                  description: "Pantheon-based game"
+                },
+                {
+                  name: "Inkling",
+                  path: "Games+Inkling",
+                  description: "Inkling game project"
+                },
+                {
+                  name: "Ledge Board Game",
+                  path: "Games+Ledge Board Game",
+                  description: "Board game project"
+                },
+                {
+                  name: "Butterfly Galaxii",
+                  path: "Games+Butterfly Galaxii",
+                  description: "Primary sci-fi RPG with extensive worldbuilding",
+                  sections: [
+                    "Preface",
+                    "Introduction",
+                    "Player Docs (Player+...)",
+                    "GM Docs (GM Docs+...)",
+                    "AI Docs (AI Docs+...)"
+                  ],
+                  key_areas: {
+                    "Factions" => "Games+Butterfly Galaxii+Player+Factions",
+                    "Species" => "Games+Butterfly Galaxii+Player+Species",
+                    "Cultures" => "Games+Butterfly Galaxii+Player+Cultures",
+                    "Tech" => "Games+Butterfly Galaxii+Player+Tech"
+                  }
+                }
+              ]
+            },
+            "Business Plan" => {
+              description: "Business planning and strategy documents",
+              path: "Business Plan"
+            },
+            "Neoterics" => {
+              description: "AI/AGI research and frameworks (MAGUS, MeTTa, OpenPsi)",
+              path: "Neoterics"
+            },
+            "Notes" => {
+              description: "General notes and miscellaneous content",
+              path: "Notes"
+            }
+          },
+
+          guidelines: {
+            naming_conventions: [
+              "Use '+' to create hierarchical card names (e.g., 'Games+Butterfly Galaxii+Player+Species')",
+              "Card names are case-sensitive",
+              "Use spaces in card names, not underscores (MCP tools handle encoding)",
+              "Avoid creating 'virtual cards' - prefer placing content in full hierarchical paths"
+            ],
+
+            content_placement: [
+              "Place game content under appropriate game (e.g., 'Games+Butterfly Galaxii+...')",
+              "Use Player/GM/AI Docs hierarchy within games for role-specific content",
+              "Player Docs: publicly visible content for players",
+              "GM Docs: game master notes, hidden from players",
+              "AI Docs: instructions and context for AI agents",
+              "Check for existing '+GM+AI' cards in a section for AI-specific guidance (like CLAUDE.md files)",
+              "Business content goes under 'Business Plan'",
+              "AI research goes under 'Neoterics'",
+              "Miscellaneous content goes under 'Notes'"
+            ],
+
+            content_structure: [
+              "Major sections should have a '+table-of-contents' child card",
+              "Use '+intro' or '+Preface' for introductory content",
+              "Keep table-of-contents cards updated when adding new subsections",
+              "Use RichText type for most content cards",
+              "Use Pointer type for cards that reference other cards",
+              "Search cards contain dynamic queries, not static results"
+            ],
+
+            special_cards: [
+              "Virtual cards: Empty junction cards that exist for naming - actual content is in compound child cards",
+              "Pointer cards: Contain references to other cards (use list_children to see them)",
+              "Search cards: Content shows query, results are dynamic",
+              "+GM+AI cards: Look for these in sections for AI-specific instructions and context"
+            ],
+
+            best_practices: [
+              "Always search for existing content before creating new cards",
+              "Check parent card's +table-of-contents before adding new sections",
+              "Use search_cards with search_in: 'both' for comprehensive searches",
+              "Virtual cards are usually empty - look for compound child cards with full paths",
+              "When in doubt about placement, check the Home+table-of-contents hierarchy"
+            ]
+          },
+
+          common_patterns: {
+            game_content: "Games+<GameName>+<PlayerGMAI>+<Section>+<Subsection>+<CardName>",
+            business: "Business Plan+<Section>+<CardName>",
+            research: "Neoterics+<Topic>+<CardName>",
+            notes: "Notes+<Category>+<CardName>"
+          },
+
+          helpful_cards: [
+            "Home+table-of-contents - Main navigation structure",
+            "Games+table-of-contents - All game projects",
+            "Games+Butterfly Galaxii+table-of-contents - Main RPG structure",
+            "Games+Butterfly Galaxii+AI Docs+table-of-contents - AI agent guidance for BG"
+          ]
+        }
+      end
     end # class Tools
   end # module Mcp
   end # module Archive
