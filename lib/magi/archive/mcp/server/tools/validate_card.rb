@@ -10,6 +10,10 @@ module Magi
           # MCP Tool for card validation
           class ValidateCard < ::MCP::Tool
             description "Validate a card's tags and structure based on its type"
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
 
             input_schema(
               properties: {

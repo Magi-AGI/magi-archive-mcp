@@ -13,6 +13,10 @@ module Magi
             # Alias Client for cleaner error handling
             Client = Magi::Archive::Mcp::Client
             description "Update an existing card in the Magi Archive wiki"
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
 
             input_schema(
               properties: {
