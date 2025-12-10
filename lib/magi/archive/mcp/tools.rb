@@ -140,7 +140,14 @@ module Magi
           params[:type] = type if type
           params[:offset] = offset if offset > 0
 
-          cards = client.fetch_all("/cards", limit: limit, **params)
+          # When limit is specified, collect only up to that many cards
+          cards = []
+          each_card_page(**params, limit: [limit, 100].min) do |page|
+            page_cards = page["cards"] || []
+            remaining = limit - cards.length
+            cards.concat(page_cards.take(remaining))
+            break if cards.length >= limit
+          end
 
           if block_given?
             cards.each(&block)
@@ -176,11 +183,28 @@ module Magi
           params[:type] = type if type
 
           page_count = 0
-          client.each_page("/cards", limit: limit, **params) do |page|
-            page_count += 1
-            break if max_pages && page_count > max_pages
+          offset = 0
+          loop do
+            page_data = client.paginated_get("/cards", limit: limit, offset: offset, **params)
+            items = page_data[:data]
 
-            yield page if block_given?
+            break if items.nil? || items.empty?
+
+            page_count += 1
+
+            # Yield full page hash with metadata (string keys for compatibility)
+            yield({
+              "cards" => items,
+              "total" => page_data[:total],
+              "offset" => page_data[:offset],
+              "limit" => page_data[:limit]
+            }) if block_given?
+
+            break if max_pages && page_count >= max_pages
+
+            # Move to next page
+            offset = page_data[:next_offset] || (page_data[:offset] + items.length)
+            break if page_data[:next_offset].nil? && items.length < limit
           end
         end
 
@@ -1022,14 +1046,9 @@ module Magi
         def parse_tags_from_content(content)
           tags = []
 
-          # Extract [[...]] format
+          # Extract [[...]] format only
           content.scan(/\[\[([^\]]+)\]\]/) do |match|
             tags << match[0].strip
-          end
-
-          # If no bracket tags found, try line-separated
-          if tags.empty?
-            tags = content.split(/[\n,]/).map(&:strip).reject(&:empty?)
           end
 
           tags.uniq
