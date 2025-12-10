@@ -88,6 +88,16 @@ module Magi
                   parts << "**Note:** This is a Search card. Content shows the search query. Results are dynamically generated when viewed on wiki."
                 end
 
+                # Add warning for virtual cards (empty junction cards)
+                # Virtual cards are naming anchors - actual content is in compound child cards
+                if card['virtual_card'] == true
+                  parts << ""
+                  parts << "**Warning:** This is a virtual/junction card with no content."
+                  parts << "The actual content is likely in a compound child card with a full hierarchical path."
+                  parts << "Search for cards containing '#{card['name']}' in their name to find the real content."
+                  parts << "Example: If this is 'Trallox', look for 'Games+Butterfly Galaxii+...+Trallox'"
+                end
+
                 if card['children']&.any?
                   parts << ""
                   parts << "## Children (#{card['children'].size})"
