@@ -1080,6 +1080,142 @@ module Magi
           name.gsub(" ", "_")
         end
 
+        # Search for cards and replace text in their content
+        #
+        # This is a convenience method that combines search and batch update operations.
+        # It searches for cards containing a pattern, then replaces text across all matches.
+        #
+        # @param search_pattern [String, Regexp] Text or regex pattern to find in card content
+        # @param replace_with [String] Replacement text
+        # @param options [Hash] Search and replace options
+        # @option options [String] :card_name_pattern Optional pattern to filter card names
+        # @option options [String] :type Optional card type filter
+        # @option options [Boolean] :regex (false) Treat search_pattern as regex
+        # @option options [Boolean] :case_sensitive (true) Case-sensitive search
+        # @option options [Integer] :limit (50) Max cards to update in single operation
+        # @option options [Boolean] :dry_run (false) Preview changes without applying
+        # @option options [String] :mode ("per_item") Batch mode: "per_item" or "transactional"
+        #
+        # @return [Hash] Results with :preview (dry run) or :updated (actual changes)
+        #
+        # @example Simple text replacement
+        #   results = tools.search_and_replace("old text", "new text")
+        #
+        # @example Regex replacement with type filter
+        #   results = tools.search_and_replace(
+        #     /(foo|bar)/,
+        #     "baz",
+        #     type: "RichText",
+        #     regex: true
+        #   )
+        #
+        # @example Dry run to preview changes
+        #   preview = tools.search_and_replace(
+        #     "deprecated",
+        #     "updated",
+        #     dry_run: true
+        #   )
+        def search_and_replace(search_pattern, replace_with, **options)
+          # Extract options with defaults
+          card_name_pattern = options[:card_name_pattern]
+          type = options[:type]
+          use_regex = options.fetch(:regex, false)
+          case_sensitive = options.fetch(:case_sensitive, true)
+          limit = options.fetch(:limit, 50)
+          dry_run = options.fetch(:dry_run, false)
+          mode = options.fetch(:mode, "per_item")
+
+          # Build search query to find cards with matching content
+          search_params = { search_in: "content", limit: limit }
+          
+          # For regex patterns, we need to fetch cards and filter manually
+          # For simple text, we can use the content search
+          if use_regex
+            # Fetch all cards of specified type and filter in Ruby
+            search_params[:type] = type if type
+            all_cards = fetch_all_cards(**search_params.merge(limit: 100))
+            
+            regex = case_sensitive ? Regexp.new(search_pattern.to_s) : Regexp.new(search_pattern.to_s, Regexp::IGNORECASE)
+            matching_cards = all_cards.select { |card| card["content"] =~ regex }
+          else
+            # Use server-side content search for simple text patterns
+            search_params[:q] = search_pattern
+            search_params[:type] = type if type
+            search_result = search_cards(**search_params)
+            matching_cards = search_result["cards"] || []
+          end
+
+          # Filter by card name pattern if provided
+          if card_name_pattern
+            name_regex = Regexp.new(card_name_pattern)
+            matching_cards = matching_cards.select { |card| card["name"] =~ name_regex }
+          end
+
+          # Limit results
+          matching_cards = matching_cards.take(limit)
+
+          return { preview: [], message: "No matching cards found" } if matching_cards.empty?
+
+          # Prepare replacement operations
+          operations = matching_cards.map do |card|
+            # Fetch full card content
+            full_card = get_card(card["name"])
+            original_content = full_card["content"] || ""
+            
+            # Perform replacement
+            new_content = if use_regex
+                           regex = case_sensitive ? Regexp.new(search_pattern.to_s) : Regexp.new(search_pattern.to_s, Regexp::IGNORECASE)
+                           original_content.gsub(regex, replace_with)
+                         else
+                           if case_sensitive
+                             original_content.gsub(search_pattern, replace_with)
+                           else
+                             original_content.gsub(/#{Regexp.escape(search_pattern)}/i, replace_with)
+                           end
+                         end
+
+            # Skip if no changes
+            next nil if original_content == new_content
+
+            {
+              card_name: card["name"],
+              original_content: original_content,
+              new_content: new_content,
+              operation: {
+                action: "update",
+                name: card["name"],
+                content: new_content
+              }
+            }
+          end.compact
+
+          return { preview: [], message: "No changes needed" } if operations.empty?
+
+          # Return preview for dry run
+          if dry_run
+            return {
+              preview: operations.map do |op|
+                {
+                  card_name: op[:card_name],
+                  changes: "Content will be updated (#{op[:original_content].length} → #{op[:new_content].length} chars)"
+                }
+              end,
+              total_cards: operations.size,
+              message: "Dry run complete. Use dry_run: false to apply changes."
+            }
+          end
+
+          # Execute batch update
+          batch_ops = operations.map { |op| op[:operation] }
+          result = batch_operations(batch_ops, mode: mode)
+
+          {
+            updated: operations.map { |op| op[:card_name] },
+            total_cards: operations.size,
+            batch_result: result
+          }
+        end
+
         def encode_card_name(name)
           # Encode all characters except: A-Z a-z 0-9 - _ . ~ +
           # Keep + literal for Decko compound cards (e.g., "Parent+Child")
