@@ -24,36 +24,41 @@ module Magi
             )
 
             class << self
-              def call(arguments:, context:)
-                query = arguments["query"]
-                magi_tools = context[:magi_tools]
+              def call(query:, server_context:)
+                tools = server_context[:magi_tools]
 
                 # Use search_cards to find matching cards
-                search_result = magi_tools.client.search_cards(
-                  query: query,
+                search_result = tools.search_cards(
+                  q: query,
                   search_in: "both", # Search names and content
                   limit: 10
                 )
 
                 # Transform to ChatGPT connector format
-                results = search_result[:cards].map do |card|
+                results = search_result['cards'].map do |card|
                   {
-                    id: card[:name],
-                    title: card[:name],
-                    url: "https://wiki.magi-agi.org/#{card[:name].gsub(' ', '_')}"
+                    id: card['name'],
+                    title: card['name'],
+                    url: "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}"
                   }
                 end
 
-                # Return as MCP content array with JSON-encoded text
+                # Return as MCP Tool Response with JSON-encoded text
                 # This is the format ChatGPT connectors expect
-                [
-                  {
-                    type: "text",
-                    text: JSON.generate({ results: results })
-                  }
-                ]
-              rescue => e
-                ErrorFormatter.format_error(e, "search")
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: JSON.generate({ results: results })
+                }])
+              rescue Client::AuthenticationError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.authentication_error(e.message)
+                }], error: true)
+              rescue StandardError => e
+                ::MCP::Tool::Response.new([{
+                  type: "text",
+                  text: ErrorFormatter.generic_error("searching cards with query '#{query}'", e)
+                }], error: true)
               end
             end
           end

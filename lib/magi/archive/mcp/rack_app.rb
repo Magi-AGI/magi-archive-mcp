@@ -34,8 +34,9 @@ module Magi
       class SSEStreamer
         def each
           # Send initial endpoint event
+          # ChatGPT POSTs to the same /sse URL, so advertise that
           yield "event: endpoint\n"
-          yield "data: /message\n\n"
+          yield "data: /sse\n\n"
 
           # Keep connection alive with periodic keepalive messages
           # In production, this would be managed by the client disconnecting
@@ -77,8 +78,9 @@ module Magi
               all_http_headers: env.select { |k,v| k.start_with?('HTTP_') }
             })]]
 
-          when ['GET', '/sse']
+          when ['GET', '/sse'], ['GET', '/sse/']
             # SSE endpoint - uses Rack hijack API for streaming
+            # Handle both /sse and /sse/ for compatibility with different MCP clients
             headers = {
               'Content-Type' => 'text/event-stream',
               'Cache-Control' => 'no-cache',
@@ -88,58 +90,33 @@ module Magi
             # Return async response that will be hijacked by Puma
             [200, headers, SSEStreamer.new]
 
-          when ['POST', '/sse'], ['POST', '/message']
-            # Handle MCP messages on both /sse and /message endpoints
-            # ChatGPT posts to /sse, other clients may use /message
+          when ['POST', '/sse'], ['POST', '/sse/'], ['POST', '/message']
+            # Handle MCP messages on /sse, /sse/, and /message endpoints
+            # ChatGPT posts to /sse or /sse/, other clients may use /message
             begin
               body = request.body.read
-              request_data = JSON.parse(body)
+              request_data = JSON.parse(body, symbolize_names: true)
 
-              # Route MCP protocol methods to the appropriate handlers
-              # mcp gem 0.4.0 made handle_request private, so we route directly
-              method = request_data['method']
-
-              result = case method
-              when 'initialize'
-                self.class.mcp_server_instance.send(:init, request_data)
-              when 'tools/list'
-                self.class.mcp_server_instance.send(:list_tools, request_data)
-              when 'tools/call'
-                self.class.mcp_server_instance.send(:call_tool, request_data)
-              when 'resources/list'
-                self.class.mcp_server_instance.send(:list_resources, request_data)
-              when 'resources/read'
-                self.class.mcp_server_instance.send(:read_resource_no_content, request_data)
-              when 'prompts/list'
-                self.class.mcp_server_instance.send(:list_prompts, request_data)
-              when 'prompts/get'
-                self.class.mcp_server_instance.send(:get_prompt, request_data)
-              when 'ping'
-                {}
-              else
-                nil
-              end
-
-              # Wrap result in JSON-RPC envelope
-              response = if result.nil?
-                { jsonrpc: '2.0', id: request_data['id'], error: { code: -32601, message: "Method not found: #{method}" } }
-              else
-                { jsonrpc: '2.0', id: request_data['id'], result: result }
-              end
+              # Use the public handle method which properly initializes instrumentation
+              response = self.class.mcp_server_instance.handle(request_data)
 
               [200, { 'Content-Type' => 'application/json' }, [JSON.generate(response)]]
             rescue JSON::ParserError => e
-              [400, { 'Content-Type' => 'application/json' }, [JSON.generate({
-                error: 'Invalid JSON',
-                message: e.message
-              })]]
+              error_response = {
+                jsonrpc: '2.0',
+                id: nil,
+                error: { code: -32700, message: 'Parse error', data: e.message }
+              }
+              [400, { 'Content-Type' => 'application/json' }, [JSON.generate(error_response)]]
             rescue StandardError => e
-              [500, { 'Content-Type' => 'application/json' }, [JSON.generate({
-                error: 'Server error',
-                message: e.message,
-                backtrace: e.backtrace.first(5)
-              })]]
+              error_response = {
+                jsonrpc: '2.0',
+                id: request_data&.dig(:id),
+                error: { code: -32603, message: 'Internal error', data: e.message }
+              }
+              [500, { 'Content-Type' => 'application/json' }, [JSON.generate(error_response)]]
             end
+
 
           when ['GET', '/']
             [200, { 'Content-Type' => 'application/json' }, [JSON.generate({
