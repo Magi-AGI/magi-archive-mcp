@@ -1272,4 +1272,99 @@ RSpec.describe Magi::Archive::Mcp::Tools do
     end
   end
 
+  describe "#get_ai_instructions" do
+    let(:section_name) { "Games+Butterfly Galaxii" }
+    let(:ai_card_name) { "Games+Butterfly Galaxii+GM+AI" }
+    let(:encoded_ai_card_name) { "Games+Butterfly%20Galaxii+GM+AI" }
+    let(:ai_card_url) { "https://test.example.com/api/mcp/cards/#{encoded_ai_card_name}" }
+
+    context "when +GM+AI card exists with content" do
+      let(:ai_card_response) do
+        {
+          "card" => {
+            "name" => ai_card_name,
+            "content" => "AI-specific instructions for Butterfly Galaxii",
+            "type" => "RichText"
+          }
+        }
+      end
+
+      before do
+        stub_request(:get, ai_card_url)
+          .with(headers: { "Authorization" => "Bearer #{valid_token}" })
+          .to_return(status: 200, body: ai_card_response.to_json)
+      end
+
+      it "returns the AI instruction card" do
+        result = tools.get_ai_instructions(section_name)
+
+        expect(result).to be_a(Hash)
+        expect(result["name"]).to eq(ai_card_name)
+        expect(result["content"]).to eq("AI-specific instructions for Butterfly Galaxii")
+      end
+    end
+
+    context "when +GM+AI card exists but is empty" do
+      let(:empty_card_response) do
+        {
+          "card" => {
+            "name" => ai_card_name,
+            "content" => "   ",
+            "type" => "RichText"
+          }
+        }
+      end
+
+      before do
+        stub_request(:get, ai_card_url)
+          .to_return(status: 200, body: empty_card_response.to_json)
+      end
+
+      it "returns nil for empty content" do
+        result = tools.get_ai_instructions(section_name)
+        expect(result).to be_nil
+      end
+    end
+
+    context "when +GM+AI card does not exist" do
+      before do
+        stub_request(:get, ai_card_url)
+          .to_return(
+            status: 404,
+            body: { "error" => "not_found", "message" => "Card not found" }.to_json
+          )
+      end
+
+      it "returns nil" do
+        result = tools.get_ai_instructions(section_name)
+        expect(result).to be_nil
+      end
+    end
+
+    context "when an error occurs" do
+      before do
+        stub_request(:get, ai_card_url)
+          .to_return(status: 500, body: "Internal Server Error")
+      end
+
+      it "returns nil and logs warning" do
+        expect(tools).to receive(:warn).with(/Error fetching AI instructions/)
+        result = tools.get_ai_instructions(section_name)
+        expect(result).to be_nil
+      end
+    end
+
+    it "constructs the correct +GM+AI card name" do
+      stub_request(:get, "https://test.example.com/api/mcp/cards/Business%20Plan+GM+AI")
+        .to_return(
+          status: 404,
+          body: { "error" => "not_found" }.to_json
+        )
+
+      tools.get_ai_instructions("Business Plan")
+
+      expect(WebMock).to have_requested(:get, "https://test.example.com/api/mcp/cards/Business%20Plan+GM+AI")
+    end
+  end
+
 end

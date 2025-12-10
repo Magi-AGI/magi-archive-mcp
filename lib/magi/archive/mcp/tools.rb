@@ -1770,11 +1770,13 @@ module Magi
             ],
 
             best_practices: [
+              "IMPORTANT: Before working in a section, check for a '+GM+AI' card (e.g., 'Games+Butterfly Galaxii+GM+AI') - these contain AI-specific instructions similar to CLAUDE.md files",
               "Always search for existing content before creating new cards",
               "Check parent card's +table-of-contents before adding new sections",
               "Use search_cards with search_in: 'both' for comprehensive searches",
               "Virtual cards are usually empty - look for compound child cards with full paths",
-              "When in doubt about placement, check the Home+table-of-contents hierarchy"
+              "When in doubt about placement, check the Home+table-of-contents hierarchy",
+              "For any major section or game, look for '<Section>+GM+AI' cards that provide context-specific guidance"
             ]
           },
 
@@ -1792,6 +1794,47 @@ module Magi
             "Games+Butterfly Galaxii+AI Docs+table-of-contents - AI agent guidance for BG"
           ]
         }
+      end
+
+      # Find and retrieve +GM+AI instruction card for a section
+      #
+      # Checks if a section has a +GM+AI card that contains AI-specific
+      # instructions and context (similar to CLAUDE.md files in code repositories).
+      #
+      # @param section_name [String] the section name (e.g., "Games+Butterfly Galaxii")
+      # @return [Hash, nil] the +GM+AI card content if it exists, nil otherwise
+      #
+      # @example Check for AI instructions in Butterfly Galaxii
+      #   instructions = tools.get_ai_instructions("Games+Butterfly Galaxii")
+      #   if instructions
+      #     puts instructions["content"]
+      #   end
+      #
+      # @example Common patterns
+      #   tools.get_ai_instructions("Games+Butterfly Galaxii")  # Main game instructions
+      #   tools.get_ai_instructions("Games+Butterfly Galaxii+Player")  # Player section
+      #   tools.get_ai_instructions("Business Plan")  # Business plan instructions
+      def get_ai_instructions(section_name)
+        ai_card_name = "#{section_name}+GM+AI"
+
+        begin
+          response = get_card(ai_card_name)
+          card = response["card"] || response
+
+          # Return the card if it has meaningful content
+          if card && card["content"] && !card["content"].strip.empty?
+            card
+          else
+            nil
+          end
+        rescue Client::NotFoundError
+          # Card doesn't exist - that's ok
+          nil
+        rescue StandardError => e
+          # Log error but don't fail
+          warn "Error fetching AI instructions for #{section_name}: #{e.message}"
+          nil
+        end
       end
     end # class Tools
   end # module Mcp
