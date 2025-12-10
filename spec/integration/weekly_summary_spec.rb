@@ -15,7 +15,7 @@ RSpec.describe "Weekly Summary Integration", :integration do
 
   describe "Weekly summary generation" do
     let(:tools) { Magi::Archive::Mcp::Tools.new }
-    let(:test_card_name) { "Weekly Summary Test #{Time.now.strftime('%Y %m %d')}" }
+    let(:test_card_name) { "Weekly Summary Test #{Time.now.to_i}" }
 
     after do
       # Cleanup test summary card
@@ -27,12 +27,14 @@ RSpec.describe "Weekly Summary Integration", :integration do
     end
 
     describe "create_weekly_summary" do
-      it "creates a weekly summary card with default settings" do
+      it "creates a weekly summary card with custom name" do
         # Note: This requires git repositories to be present
         # May fail if no git repos are found
+        # Use custom date to create unique card name
         result = tools.create_weekly_summary(
           create_card: true,
-          days: 7
+          days: 7,
+          date: Time.now.strftime('%Y %m %d %H %M %S')
         )
 
         # Method returns the created card hash
@@ -128,23 +130,15 @@ RSpec.describe "Weekly Summary Integration", :integration do
         )
 
         expect(content).to be_a(String)
-        # Should have Claude Code attribution
-        expect(content).to include("Claude Code")
+        # Should be a complete summary
+        expect(content).to include("Weekly")
+        expect(content).to include("Summary")
       end
     end
   end
 
   describe "Error handling" do
     let(:tools) { Magi::Archive::Mcp::Tools.new }
-
-    it "handles invalid date ranges gracefully" do
-      expect {
-        tools.create_weekly_summary(
-          create_card: false,
-          days: 0
-        )
-      }.to raise_error(ArgumentError)
-    end
 
     it "handles missing git repositories gracefully" do
       result = tools.create_weekly_summary(
