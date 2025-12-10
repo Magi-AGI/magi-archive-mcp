@@ -337,4 +337,55 @@ RSpec.describe "Session Improvements", :integration do
       expect(result[:message]).to include("No matching cards")
     end
   end
+
+  describe "Trash filtering in search_cards" do
+    it "excludes deleted cards from search_cards results" do
+      # Search for all cards (or a common term)
+      result = tools.search_cards(limit: 100)
+
+      skip "No cards found" if result["cards"].nil? || result["cards"].empty?
+
+      # Verify none of the returned cards are deleted/trashed
+      # We can verify this by checking that each card is accessible
+      result["cards"].first(10).each do |card|
+        card_name = card["name"]
+
+        # This should succeed for non-deleted cards
+        expect { tools.get_card(card_name) }.not_to raise_error
+
+        # Verify the card is not marked as deleted
+        full_card = tools.get_card(card_name)
+        card_data = full_card["card"] || full_card
+        expect(card_data["trash"]).to be_falsy
+      end
+    end
+
+    it "filters trashed cards when searching by query" do
+      # Search for a common term
+      result = tools.search_cards(q: "the", search_in: "content", limit: 50)
+
+      skip "No cards found" if result["cards"].nil? || result["cards"].empty?
+
+      # Check that all returned cards are not trashed
+      result["cards"].first(5).each do |card|
+        full_card = tools.get_card(card["name"])
+        card_data = full_card["card"] || full_card
+        expect(card_data["trash"]).to be_falsy
+      end
+    end
+
+    it "filters trashed cards when filtering by type" do
+      # Search for a specific type
+      result = tools.search_cards(type: "Basic", limit: 20)
+
+      skip "No Basic cards found" if result["cards"].nil? || result["cards"].empty?
+
+      # Verify all returned cards are not trashed
+      result["cards"].first(5).each do |card|
+        full_card = tools.get_card(card["name"])
+        card_data = full_card["card"] || full_card
+        expect(card_data["trash"]).to be_falsy
+      end
+    end
+  end
 end
