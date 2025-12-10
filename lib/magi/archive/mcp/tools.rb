@@ -932,8 +932,6 @@ module Magi
           client.delete("/admin/database/backup/#{filename}")
         end
 
-        private
-
         # Parse tags from content string
         #
         # Extracts tag names from various Decko tag formats:
@@ -942,6 +940,14 @@ module Magi
         #
         # @param content [String] the content to parse
         # @return [Array<String>] extracted tag names
+        #
+        # @example Extract tags from pointer format
+        #   tags = tools.parse_tags_from_content("[[tag1]] and [[tag2]]")
+        #   # => ["tag1", "tag2"]
+        #
+        # @example Extract tags from line-separated format
+        #   tags = tools.parse_tags_from_content("tag1\ntag2\ntag3")
+        #   # => ["tag1", "tag2", "tag3"]
         def parse_tags_from_content(content)
           tags = []
 
@@ -957,6 +963,8 @@ module Magi
 
           tags.uniq
         end
+
+        private
 
         # URL-encode card name for safe use in paths
         #
