@@ -516,4 +516,54 @@ RSpec.describe "Full API Integration", :integration do
       end
     end
   end
+  describe "Search operations with search_in parameter" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+
+    it "searches with default search_in=both mode" do
+      # Search for a common term that should be in both names and content
+      result = tools.search_cards(q: "card", limit: 5)
+
+      # Should return results (almost any wiki has cards with "card" in name or content)
+      expect(result).to have_key("cards")
+      expect(result["cards"]).to be_an(Array)
+    end
+
+    it "searches in names only when specified" do
+      # Search with explicit search_in=name
+      result = tools.search_cards(q: "Test", search_in: "name", limit: 5)
+
+      expect(result).to have_key("cards")
+      # Results should match cards with "Test" in their name
+    end
+
+    it "searches in content only when specified" do
+      # Search with explicit search_in=content
+      result = tools.search_cards(q: "content", search_in: "content", limit: 5)
+
+      expect(result).to have_key("cards")
+      # Results should match cards with "content" in their content
+    end
+
+    it "finds cards with spaces in names using both modes" do
+      # Create a test card with spaces in name
+      test_name = "Integration Test Card #{Time.now.to_i}"
+      tools.create_card(test_name, content: "Test content for search", type: "RichText")
+
+      begin
+        # Search with spaces (default both mode should find it)
+        result = tools.search_cards(q: test_name.split.first, limit: 50)
+
+        # Should find the card we just created
+        card_names = result["cards"].map { |c| c["name"] }
+        matching = card_names.any? { |name| name.include?(test_name.split.first) }
+
+        expect(matching).to be true
+      ensure
+        # Cleanup
+        tools.delete_card(test_name) rescue nil
+      end
+    end
+  end
+
+
 end

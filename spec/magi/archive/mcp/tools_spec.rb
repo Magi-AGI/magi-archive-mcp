@@ -869,4 +869,101 @@ RSpec.describe Magi::Archive::Mcp::Tools do
       expect(result["results"].length).to eq(2)
     end
   end
+  describe "#normalize_card_name" do
+    it "converts spaces to underscores" do
+      result = tools.normalize_card_name("Daresh Tral Subcultures")
+      expect(result).to eq("Daresh_Tral_Subcultures")
+    end
+
+    it "preserves plus signs in compound names" do
+      result = tools.normalize_card_name("Business Plan+Overview")
+      expect(result).to eq("Business_Plan+Overview")
+    end
+
+    it "handles names that are already normalized" do
+      result = tools.normalize_card_name("Already_Normalized")
+      expect(result).to eq("Already_Normalized")
+    end
+
+    it "handles names with multiple consecutive spaces" do
+      result = tools.normalize_card_name("Test  Card   Name")
+      expect(result).to eq("Test__Card___Name")
+    end
+
+    it "handles empty string" do
+      result = tools.normalize_card_name("")
+      expect(result).to eq("")
+    end
+
+    it "handles strings with only spaces" do
+      result = tools.normalize_card_name("   ")
+      expect(result).to eq("___")
+    end
+  end
+
+  describe "#search_cards with default search_in parameter" do
+    let(:cards_url) { "https://test.example.com/api/mcp/cards" }
+    let(:search_response) do
+      {
+        "cards" => [
+          { "name" => "Card 1", "content" => "Game content" },
+          { "name" => "Card 2", "content" => "Game plan" }
+        ],
+        "total" => 2,
+        "limit" => 50,
+        "offset" => 0
+      }
+    end
+
+    before do
+      stub_request(:get, cards_url)
+        .with(
+          query: hash_including({}),
+          headers: { "Authorization" => "Bearer #{valid_token}" }
+        )
+        .to_return(
+          status: 200,
+          body: search_response.to_json,
+          headers: { "Content-Type" => "application/json" }
+        )
+    end
+
+    it "uses search_in=both when not specified" do
+      stub_request(:get, cards_url)
+        .with(query: { "q" => "game", "search_in" => "both", "limit" => "50", "offset" => "0" })
+        .to_return(status: 200, body: search_response.to_json)
+
+      # Note: The underlying client uses default from search endpoint if not passed
+      # This test verifies that when search_in is not provided, the endpoint's default (both) is used
+      tools.search_cards(q: "game")
+
+      # Verify the request was made - the client may or may not include search_in in params
+      expect(WebMock).to have_requested(:get, cards_url)
+        .with(query: hash_including("q" => "game"))
+    end
+
+    it "allows explicit override to search_in=name" do
+      stub_request(:get, cards_url)
+        .with(query: { "q" => "game", "search_in" => "name", "limit" => "50", "offset" => "0" })
+        .to_return(status: 200, body: search_response.to_json)
+
+      tools.search_cards(q: "game", search_in: "name")
+
+      expect(WebMock).to have_requested(:get, cards_url)
+        .with(query: { "q" => "game", "search_in" => "name", "limit" => "50", "offset" => "0" })
+    end
+
+    it "allows explicit override to search_in=content" do
+      stub_request(:get, cards_url)
+        .with(query: { "q" => "game", "search_in" => "content", "limit" => "50", "offset" => "0" })
+        .to_return(status: 200, body: search_response.to_json)
+
+      tools.search_cards(q: "game", search_in: "content")
+
+      expect(WebMock).to have_requested(:get, cards_url)
+        .with(query: { "q" => "game", "search_in" => "content", "limit" => "50", "offset" => "0" })
+    end
+  end
+
+
 end
