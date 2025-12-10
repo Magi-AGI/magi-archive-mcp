@@ -1132,8 +1132,9 @@ module Magi
           # For simple text, we can use the content search
           if use_regex
             # Fetch all cards of specified type and filter in Ruby
-            search_params[:type] = type if type
-            all_cards = fetch_all_cards(**search_params.merge(limit: 100))
+            fetch_params = { limit: 100 }
+            fetch_params[:type] = type if type
+            all_cards = fetch_all_cards(**fetch_params)
             
             regex = case_sensitive ? Regexp.new(search_pattern.to_s) : Regexp.new(search_pattern.to_s, Regexp::IGNORECASE)
             matching_cards = all_cards.select { |card| card["content"] =~ regex }
@@ -1159,7 +1160,8 @@ module Magi
           # Prepare replacement operations
           operations = matching_cards.map do |card|
             # Fetch full card content
-            full_card = get_card(card["name"])
+            full_card_response = get_card(card["name"])
+            full_card = full_card_response["card"] || full_card_response
             original_content = full_card["content"] || ""
             
             # Perform replacement
@@ -1645,6 +1647,8 @@ module Magi
         # Log error but don't fail the whole operation
         warn "Failed to update TOC: #{e.message}"
       end
+
+      public
 
       # Get site context information for AI agents
       #

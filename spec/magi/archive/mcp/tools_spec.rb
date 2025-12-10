@@ -965,5 +965,311 @@ RSpec.describe Magi::Archive::Mcp::Tools do
     end
   end
 
+  describe "#search_and_replace" do
+    let(:cards_url) { "https://test.example.com/api/mcp/cards" }
+    let(:card_url) { "https://test.example.com/api/mcp/cards/Test%20Card" }
+    let(:batch_url) { "https://test.example.com/api/mcp/cards/batch" }
+
+    let(:search_response) do
+      {
+        "cards" => [
+          { "name" => "Test Card", "content" => "old text in content", "type" => "RichText" }
+        ],
+        "total" => 1
+      }
+    end
+
+    let(:full_card_response) do
+      {
+        "card" => {
+          "name" => "Test Card",
+          "content" => "old text in content",
+          "type" => "RichText"
+        }
+      }
+    end
+
+    before do
+      # Stub search cards
+      stub_request(:get, cards_url)
+        .with(
+          query: hash_including("q" => "old text", "search_in" => "content"),
+          headers: { "Authorization" => "Bearer #{valid_token}" }
+        )
+        .to_return(status: 200, body: search_response.to_json)
+
+      # Stub get_card for fetching full content
+      stub_request(:get, card_url)
+        .with(headers: { "Authorization" => "Bearer #{valid_token}" })
+        .to_return(status: 200, body: full_card_response.to_json)
+    end
+
+    it "performs dry run by default" do
+      result = tools.search_and_replace("old text", "new text", dry_run: true)
+
+      expect(result[:preview]).to be_an(Array)
+      expect(result[:preview].first[:card_name]).to eq("Test Card")
+      expect(result[:message]).to include("Dry run complete")
+      expect(WebMock).not_to have_requested(:post, batch_url)
+    end
+
+    it "searches and replaces text content" do
+      batch_response = {
+        "results" => [
+          { "status" => 200, "success" => true }
+        ],
+        "mode" => "per_item"
+      }
+
+      stub_request(:post, batch_url)
+        .with(
+          body: {
+            "ops" => [
+              {
+                "action" => "update",
+                "name" => "Test Card",
+                "content" => "new text in content"
+              }
+            ],
+            "mode" => "per_item"
+          }.to_json
+        )
+        .to_return(status: 207, body: batch_response.to_json)
+
+      result = tools.search_and_replace("old text", "new text", dry_run: false)
+
+      expect(result[:updated]).to eq(["Test Card"])
+      expect(result[:total_cards]).to eq(1)
+    end
+
+    it "supports regex replacement" do
+      # Stub for regex search (fetches all cards)
+      stub_request(:get, cards_url)
+        .with(
+          query: { "limit" => "100", "offset" => "0" },
+          headers: { "Authorization" => "Bearer #{valid_token}" }
+        )
+        .to_return(
+          status: 200,
+          body: {
+            "cards" => [
+              { "name" => "Test Card", "content" => "version 1.0", "type" => "RichText" }
+            ],
+            "total" => 1,
+            "next_offset" => nil
+          }.to_json
+        )
+
+      stub_request(:get, "https://test.example.com/api/mcp/cards/Test%20Card")
+        .to_return(
+          status: 200,
+          body: {
+            "card" => { "name" => "Test Card", "content" => "version 1.0" }
+          }.to_json
+        )
+
+      batch_response = {
+        "results" => [{ "status" => 200, "success" => true }],
+        "mode" => "per_item"
+      }
+
+      stub_request(:post, batch_url)
+        .to_return(status: 207, body: batch_response.to_json)
+
+      result = tools.search_and_replace('\d+\.\d+', '2.0', regex: true, dry_run: false)
+
+      expect(result[:updated]).to eq(["Test Card"])
+    end
+
+    it "filters by card name pattern" do
+      # When card name pattern is provided, only matching cards should be updated
+      result = tools.search_and_replace(
+        "old text",
+        "new text",
+        card_name_pattern: "Test",
+        dry_run: true
+      )
+
+      expect(result[:preview]).to be_an(Array)
+      expect(result[:preview].first[:card_name]).to eq("Test Card")
+    end
+
+    it "supports case insensitive replacement" do
+      stub_request(:get, cards_url)
+        .with(query: hash_including("q" => "OLD", "search_in" => "content"))
+        .to_return(
+          status: 200,
+          body: {
+            "cards" => [
+              { "name" => "Test Card", "content" => "old text here", "type" => "RichText" }
+            ],
+            "total" => 1
+          }.to_json
+        )
+
+      stub_request(:get, card_url)
+        .to_return(
+          status: 200,
+          body: {
+            "card" => { "name" => "Test Card", "content" => "old text here" }
+          }.to_json
+        )
+
+      result = tools.search_and_replace("OLD", "new", case_sensitive: false, dry_run: true)
+
+      expect(result[:preview]).to be_an(Array)
+      expect(result[:preview].first[:card_name]).to eq("Test Card")
+    end
+
+    it "returns empty preview when no cards match" do
+      stub_request(:get, cards_url)
+        .with(query: hash_including("q" => "nonexistent"))
+        .to_return(
+          status: 200,
+          body: { "cards" => [], "total" => 0 }.to_json
+        )
+
+      result = tools.search_and_replace("nonexistent", "new", dry_run: true)
+
+      expect(result[:preview]).to eq([])
+      expect(result[:message]).to include("No matching cards found")
+    end
+
+    it "returns message when no changes needed" do
+      stub_request(:get, cards_url)
+        .with(query: hash_including("q" => "text"))
+        .to_return(status: 200, body: search_response.to_json)
+
+      stub_request(:get, card_url)
+        .to_return(
+          status: 200,
+          body: {
+            "card" => { "name" => "Test Card", "content" => "different content" }
+          }.to_json
+        )
+
+      result = tools.search_and_replace("text", "text", dry_run: true)
+
+      expect(result[:preview]).to eq([])
+      expect(result[:message]).to include("No changes needed")
+    end
+  end
+
+  describe "#get_site_context" do
+    it "returns comprehensive site context structure" do
+      result = tools.get_site_context
+
+      # Verify top-level structure
+      expect(result).to be_a(Hash)
+      expect(result[:wiki_name]).to eq("Magi Archive")
+      expect(result[:wiki_url]).to eq("https://wiki.magi-agi.org")
+      expect(result[:description]).to be_a(String)
+    end
+
+    it "includes hierarchy information" do
+      result = tools.get_site_context
+
+      expect(result[:hierarchy]).to be_a(Hash)
+      expect(result[:hierarchy]).to have_key("Home")
+      expect(result[:hierarchy]).to have_key("Games")
+      expect(result[:hierarchy]).to have_key("Business Plan")
+      expect(result[:hierarchy]).to have_key("Neoterics")
+      expect(result[:hierarchy]).to have_key("Notes")
+    end
+
+    it "provides Home section details" do
+      result = tools.get_site_context
+      home = result[:hierarchy]["Home"]
+
+      expect(home[:description]).to be_a(String)
+      expect(home[:sections]).to be_an(Array)
+      expect(home[:sections]).to include("Games", "Business Plan", "Neoterics", "Notes")
+    end
+
+    it "provides Games section with game details" do
+      result = tools.get_site_context
+      games = result[:hierarchy]["Games"]
+
+      expect(games[:description]).to be_a(String)
+      expect(games[:games]).to be_an(Array)
+      expect(games[:games]).not_to be_empty
+
+      # Check for Butterfly Galaxii
+      bg_game = games[:games].find { |g| g[:name] == "Butterfly Galaxii" }
+      expect(bg_game).not_to be_nil
+      expect(bg_game[:path]).to eq("Games+Butterfly Galaxii")
+      expect(bg_game[:sections]).to be_an(Array)
+      expect(bg_game[:key_areas]).to be_a(Hash)
+    end
+
+    it "includes comprehensive guidelines" do
+      result = tools.get_site_context
+      guidelines = result[:guidelines]
+
+      expect(guidelines).to have_key(:naming_conventions)
+      expect(guidelines).to have_key(:content_placement)
+      expect(guidelines).to have_key(:content_structure)
+      expect(guidelines).to have_key(:special_cards)
+      expect(guidelines).to have_key(:best_practices)
+
+      expect(guidelines[:naming_conventions]).to be_an(Array)
+      expect(guidelines[:content_placement]).to be_an(Array)
+      expect(guidelines[:content_structure]).to be_an(Array)
+      expect(guidelines[:special_cards]).to be_an(Array)
+      expect(guidelines[:best_practices]).to be_an(Array)
+    end
+
+    it "includes naming conventions guidance" do
+      result = tools.get_site_context
+      conventions = result[:guidelines][:naming_conventions]
+
+      expect(conventions).to include(a_string_including("+"))
+      expect(conventions).to include(a_string_including("case-sensitive"))
+    end
+
+    it "includes content placement guidance" do
+      result = tools.get_site_context
+      placement = result[:guidelines][:content_placement]
+
+      expect(placement).to include(a_string_including("Player"))
+      expect(placement).to include(a_string_including("GM"))
+      expect(placement).to include(a_string_including("AI"))
+    end
+
+    it "includes special cards information" do
+      result = tools.get_site_context
+      special = result[:guidelines][:special_cards]
+
+      expect(special).to include(a_string_including("Virtual cards"))
+      expect(special).to include(a_string_including("Pointer cards"))
+      expect(special).to include(a_string_including("Search cards"))
+      expect(special).to include(a_string_including("Deleted cards"))
+      expect(special).to include(a_string_including("+GM+AI"))
+    end
+
+    it "provides common naming patterns" do
+      result = tools.get_site_context
+      patterns = result[:common_patterns]
+
+      expect(patterns).to be_a(Hash)
+      expect(patterns).to have_key(:game_content)
+      expect(patterns).to have_key(:business)
+      expect(patterns).to have_key(:research)
+      expect(patterns).to have_key(:notes)
+
+      expect(patterns[:game_content]).to include("+")
+      expect(patterns[:business]).to include("Business Plan")
+    end
+
+    it "provides helpful navigation cards" do
+      result = tools.get_site_context
+      helpful = result[:helpful_cards]
+
+      expect(helpful).to be_an(Array)
+      expect(helpful).not_to be_empty
+      expect(helpful).to include(a_string_including("Home+table-of-contents"))
+      expect(helpful).to include(a_string_including("Games+table-of-contents"))
+    end
+  end
 
 end

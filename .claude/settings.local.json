@@ -22,7 +22,8 @@
       "WebFetch(domain:github.com)",
       "Bash(gh --version:*)",
       "Bash(bundle exec rspec:*)",
-      "Bash(scp:*)"
+      "Bash(scp:*)",
+      "mcp__magi-archive__get_card"
     ],
     "deny": [],
     "ask": []
