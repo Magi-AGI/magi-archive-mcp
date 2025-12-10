@@ -11,6 +11,11 @@ module Magi
           class CreateWeeklySummary < ::MCP::Tool
             description "Generate and create a weekly summary card that combines wiki card changes and repository activity"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
+
             input_schema(
               properties: {
                 base_path: {

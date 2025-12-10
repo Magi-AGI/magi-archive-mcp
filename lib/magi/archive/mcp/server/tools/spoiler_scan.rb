@@ -15,6 +15,11 @@ module Magi
 
             description "Scan for spoiler terms leaking from GM/AI content to player content. GM or Admin role required. Reads spoiler terms from a terms card, scans player or AI content, and writes results to a results card."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
+
             input_schema(
               properties: {
                 terms_card: {

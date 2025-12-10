@@ -11,6 +11,11 @@ module Magi
           class AdminBackup < ::MCP::Tool
             description "Manage database backups (admin only): download, list, or delete backups"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
+
             input_schema(
               properties: {
                 operation: {

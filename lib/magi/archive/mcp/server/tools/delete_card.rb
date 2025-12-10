@@ -12,6 +12,11 @@ module Magi
           class DeleteCard < ::MCP::Tool
             description "Delete a card from the Magi Archive wiki (requires admin role)"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
+
             input_schema(
               properties: {
                 name: {
