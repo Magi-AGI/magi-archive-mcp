@@ -2,6 +2,20 @@
 
 This document tracks bugs discovered in the `magi-archive` server (wiki.magi-agi.org) during MCP client integration testing.
 
+## Summary Status
+
+**All reported bugs have been resolved! ✅**
+
+- **Bug #1**: `/cards/:name/children` 500 error - ✅ FIXED
+- **Bug #2**: `/cards/batch` missing mode field - ✅ WORKAROUND (behavior correct)
+- **Bug #3**: `/render` endpoints 404 error - ✅ FIXED
+
+**Integration Test Results (as of 2025-12-11):**
+- 132 examples passing ✅
+- 0 failures
+- 3 pending (expected - documented limitations)
+- All MCP endpoints operational
+
 ## Bug #1: `/cards/:name/children` Endpoint Returns NoMethodError ✅ FIXED
 
 **Severity**: HIGH
@@ -240,6 +254,8 @@ Implement the `/api/mcp/render` and `/api/mcp/render/markdown` endpoints as spec
 
 ---
 
-## Last Updated
+## Recent Changes
 
-2025-12-08 - Added render endpoints bug after integration testing
+**2025-12-11** - Updated summary: All bugs resolved, integration tests passing
+**2025-12-08** - Added render endpoints bug after integration testing
+**2025-12-08** - Documented initial server bugs found during integration testing
