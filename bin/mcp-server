@@ -28,9 +28,6 @@ require_relative "../lib/magi/archive/mcp/server/tools/suggest_tags"
 # Relationships
 require_relative "../lib/magi/archive/mcp/server/tools/get_relationships"
 
-# Validation and recommendations
-require_relative "../lib/magi/archive/mcp/server/tools/validate_card"
-require_relative "../lib/magi/archive/mcp/server/tools/get_recommendations"
 
 # Types and rendering
 require_relative "../lib/magi/archive/mcp/server/tools/get_types"
@@ -98,9 +95,6 @@ server = ::MCP::Server.new(
     # Relationships
     Magi::Archive::Mcp::Server::Tools::GetRelationships,
 
-    # Validation and recommendations
-    Magi::Archive::Mcp::Server::Tools::ValidateCard,
-    Magi::Archive::Mcp::Server::Tools::GetRecommendations,
 
     # Types and rendering
     Magi::Archive::Mcp::Server::Tools::GetTypes,
