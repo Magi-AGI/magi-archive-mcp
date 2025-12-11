@@ -36,46 +36,63 @@ This guide documents the correct usage patterns for the Magi Archive MCP server,
 
 ---
 
-### 2. Card Names Are Case-Sensitive and Space-Sensitive
+### 2. Card Names: Spaces and Underscores Are Equivalent for Lookups
 
-**Wrong Assumption**:
+**Empirically Verified Behavior** (tested 2025-12-11):
 ```ruby
-# These are the SAME card:
-"Major Factions"
-"Major_Factions"
+# Decko treats these as THE SAME card:
+get_card(name: "Major Factions")      # Returns card ID 2212
+get_card(name: "Major_Factions")      # Returns SAME card ID 2212
 ```
 
-**Reality**:
+**How Decko Handles Spaces vs Underscores**:
+- **Lookups are normalized**: Decko treats spaces and underscores as equivalent when finding cards
+- **Canonical names are preserved**: The name used during card creation becomes the canonical name
+- **API responses return canonical names**: Even if you query with underscores, the response shows the canonical form (which may use spaces)
+
+**Example - What Actually Happens**:
 ```ruby
-# These are DIFFERENT cards in Decko:
-"Major Factions"     # Card with spaces
-"Major_Factions"     # Card with underscores
+# Create a card with spaces:
+create_card(name: "My Test Card", content: "...", type: "RichText")
+# → Creates card with canonical name "My Test Card"
+
+# Query with underscores:
+card = get_card(name: "My_Test_Card")
+# → Returns the same card, but response shows canonical name "My Test Card"
+
+# Query with spaces:
+card = get_card(name: "My Test Card")
+# → Returns the same card with canonical name "My Test Card"
 ```
 
-**Decko Naming Rules**:
-- Spaces, underscores, and hyphens are **all valid characters**
-- They are **not interchangeable**
-- Card names are **case-sensitive**
-- Hierarchies use `+` as a separator: `Parent+Child+Grandchild`
+**Important Decko Naming Rules**:
+- **Case-sensitive**: `"Main Page"` ≠ `"main page"`
+- **Spaces ≈ Underscores**: Treated as equivalent during lookup, but canonical form preserved
+- **Hyphens are distinct**: `"Test-Card"` ≠ `"Test Card"` ≠ `"Test_Card"` (hyphens are NOT normalized)
+- **Hierarchies use `+`**: `Parent+Child+Grandchild` (the `+` is part of the card name)
 
-**Correct Behavior**:
-1. Use the **exact name** returned by `search_cards`
-2. **Never normalize** or guess at name variations
-3. **Never swap** spaces for underscores or vice versa
-4. **Copy names verbatim** from search results
+**Best Practice - Always Use Canonical Names**:
+While Decko allows querying with either spaces or underscores, you should **always use the canonical name returned by the API** to ensure consistency:
 
-**Example - Correct Pattern**:
 ```ruby
 # Step 1: Search for a card
 results = search_cards(query: "Eclipser")
 
-# Step 2: Extract the EXACT name from results
+# Step 2: Extract the canonical name from results
 card_name = results["cards"][0]["name"]
 # e.g., "Games+Butterfly Galaxii+Player+Factions+Major Factions+Eclipser Mercenaries"
+# ^ This is the canonical form with spaces
 
-# Step 3: Use that exact name for get_card
-card = get_card(name: card_name)  # ALWAYS succeeds if card exists
+# Step 3: Use that canonical name for subsequent operations
+card = get_card(name: card_name)  # Uses canonical name
+update_card(name: card_name, content: "...")  # Uses canonical name
 ```
+
+**Why This Matters**:
+1. **Consistency**: Using canonical names ensures your code always references cards the same way
+2. **Readability**: Canonical names match what users see in the wiki UI
+3. **Debugging**: Easier to trace operations when names match exactly
+4. **Future-proofing**: If Decko's normalization behavior changes, canonical names will still work
 
 ---
 
@@ -275,18 +292,21 @@ card = get_card(name: "Some Card+GM")  # Authenticated as 'gm'
 # Validates: Role-based access control
 ```
 
-### Test 4: Name Sensitivity
+### Test 4: Space/Underscore Normalization
 ```ruby
-# Create two cards with similar names
-create_card(name: "Test Card", content: "With spaces")
-create_card(name: "Test_Card", content: "With underscores")
+# Create a card with spaces
+create_card(name: "Test Card", content: "Created with spaces")
 
-# Verify they're different cards
-card1 = get_card(name: "Test Card")
-card2 = get_card(name: "Test_Card")
+# Fetch using underscores (should return the same card)
+card1 = get_card(name: "Test_Card")
+card2 = get_card(name: "Test Card")
 
-# Expected: Different content
-# Validates: Names are not normalized
+# Expected: Both return same card ID, canonical name is "Test Card"
+# Validates: Decko normalizes spaces/underscores during lookup
+# Validates: API returns canonical name regardless of query variation
+
+# Clean up
+delete_card(name: "Test Card")
 ```
 
 ### Test 5: Deletion Cascade
@@ -465,18 +485,27 @@ MCP_ROLE=admin  # Auto-determined if not specified
 
 ## Common Mistakes and Corrections
 
-### ❌ Mistake 1: Normalizing Card Names
+### ❌ Mistake 1: Not Using Canonical Names from API Responses
 ```ruby
-# WRONG:
-search_result = "Major Factions"
-card = get_card(name: "Major_Factions")  # FAILS - different card
+# ⚠️ WORKS BUT NOT RECOMMENDED:
+search_result = "Major Factions"  # API returned this canonical name
+card = get_card(name: "Major_Factions")  # Works due to normalization, but inconsistent
 ```
+
+**Why This Is Problematic:**
+While Decko normalizes spaces/underscores during lookup (so this technically works), you're creating inconsistency:
+- The API returned `"Major Factions"` (canonical form)
+- Your code uses `"Major_Factions"` (non-canonical form)
+- Log files and error messages will show different names for the same card
+- Other developers may be confused by the mismatch
 
 **✅ Correct**:
 ```ruby
-search_result = "Major Factions"
-card = get_card(name: "Major Factions")  # Uses exact name
+search_result = "Major Factions"  # API returned canonical name
+card = get_card(name: "Major Factions")  # Use exact canonical name
 ```
+
+**Best Practice:** Always use the exact name string returned by the API, even though normalization would allow variations.
 
 ### ❌ Mistake 2: Using IDs Instead of Names
 ```ruby
@@ -564,12 +593,12 @@ delete_card(name: "Culture Name") if user_confirms?
 Before using the Magi Archive MCP, remember:
 
 - [ ] There is **only one** MCP endpoint (no namespaces)
-- [ ] Card names are **exact** (spaces ≠ underscores)
+- [ ] Card names: **spaces ≈ underscores** (Decko normalizes), but **always use canonical names** from API
 - [ ] Use `search_cards` → extract **name** → `get_card(name: ...)`
 - [ ] Use `list_children` for finding children (not `with_children`)
 - [ ] Check `list_children` **before deleting** (cascades are intentional)
 - [ ] Treat 404 cautiously (might be permission denial)
-- [ ] Never guess or normalize card names
+- [ ] Always use exact canonical names returned by the API (don't manually normalize)
 - [ ] Authenticate with appropriate role for your task
 - [ ] Only delete with admin role and user consent
 
