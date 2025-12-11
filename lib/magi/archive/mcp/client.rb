@@ -92,6 +92,16 @@ module Magi
           request(:patch, path, json: data)
         end
 
+        # PUT request to API endpoint
+        #
+        # @param path [String] the endpoint path
+        # @param data [Hash] data to send in the request body
+        # @return [Hash, Array] the response data
+        # @raise [APIError] if request fails
+        def put(path, **data)
+          request(:put, path, json: data)
+        end
+
         # DELETE request to API endpoint
         #
         # @param path [String] the endpoint path
@@ -281,6 +291,8 @@ module Magi
                        http_client.post(url, json: json)
                      when :patch
                        http_client.patch(url, json: json)
+                     when :put
+                       http_client.put(url, json: json)
                      when :delete
                        http_client.delete(url)
                      else

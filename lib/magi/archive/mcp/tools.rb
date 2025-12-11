@@ -295,6 +295,35 @@ module Magi
           client.delete(path)
         end
 
+        # Rename a card (admin only)
+        #
+        # Changes the name of an existing card. This is an admin-only operation.
+        # Requires admin role permissions.
+        #
+        # @param name [String] current name of the card
+        # @param new_name [String] new name for the card
+        # @param update_referers [Boolean] whether to update all references to the card (default: true)
+        # @return [Hash] rename result with old_name, new_name, status, updated_referers, and updated card data
+        #
+        # @example Rename a card and update all references
+        #   result = tools.rename_card("Old Card Name", "New Card Name")
+        #   puts "Renamed '#{result['old_name']}' to '#{result['new_name']}'"
+        #   puts "Updated referers: #{result['updated_referers']}"
+        #
+        # @example Rename without updating references
+        #   result = tools.rename_card("Old Card Name", "New Card Name", update_referers: false)
+        #
+        # @example Error handling
+        #   begin
+        #     tools.rename_card("NonExistent", "NewName")
+        #   rescue => e
+        #     puts "Rename failed: #{e.message}"
+        #   end
+        def rename_card(name, new_name, update_referers: true)
+          path = "/cards/#{encode_card_name(name)}/rename"
+          client.put(path, new_name: new_name, update_referers: update_referers)
+        end
+
         # Run spoiler scan job
         #
         # Scans for spoiler terms leaking from GM/AI content to player content.

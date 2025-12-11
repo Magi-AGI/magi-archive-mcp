@@ -576,6 +576,106 @@ RSpec.describe Magi::Archive::Mcp::Tools do
     end
   end
 
+  describe "#rename_card" do
+    let(:old_name) { "Old Card Name" }
+    let(:new_name) { "New Card Name" }
+    let(:card_url) { "https://test.example.com/api/mcp/cards/Old%20Card%20Name/rename" }
+    let(:rename_response) do
+      {
+        "status" => "renamed",
+        "old_name" => old_name,
+        "new_name" => new_name,
+        "updated_referers" => true,
+        "card" => {
+          "name" => new_name,
+          "content" => "Test card content",
+          "type" => "Basic"
+        }
+      }
+    end
+
+    it "renames card successfully with referer updates" do
+      stub_request(:put, card_url)
+        .with(
+          headers: { "Authorization" => "Bearer #{valid_token}" },
+          body: { new_name: new_name, update_referers: true }.to_json
+        )
+        .to_return(status: 200, body: rename_response.to_json)
+
+      result = tools.rename_card(old_name, new_name)
+
+      expect(result["status"]).to eq("renamed")
+      expect(result["old_name"]).to eq(old_name)
+      expect(result["new_name"]).to eq(new_name)
+      expect(result["updated_referers"]).to eq(true)
+      expect(result["card"]["name"]).to eq(new_name)
+    end
+
+    it "renames card without updating referers" do
+      no_update_response = rename_response.merge("updated_referers" => false)
+
+      stub_request(:put, card_url)
+        .with(
+          headers: { "Authorization" => "Bearer #{valid_token}" },
+          body: { new_name: new_name, update_referers: false }.to_json
+        )
+        .to_return(status: 200, body: no_update_response.to_json)
+
+      result = tools.rename_card(old_name, new_name, update_referers: false)
+
+      expect(result["status"]).to eq("renamed")
+      expect(result["updated_referers"]).to eq(false)
+    end
+
+    context "when card not found" do
+      before do
+        stub_request(:put, card_url)
+          .to_return(
+            status: 404,
+            body: { "error" => "not_found", "message" => "Card not found" }.to_json
+          )
+      end
+
+      it "raises NotFoundError" do
+        expect { tools.rename_card(old_name, new_name) }.to raise_error(
+          Magi::Archive::Mcp::Client::NotFoundError
+        )
+      end
+    end
+
+    context "when user lacks permission" do
+      before do
+        stub_request(:put, card_url)
+          .to_return(
+            status: 403,
+            body: { "error" => "permission_denied", "message" => "Admin access required" }.to_json
+          )
+      end
+
+      it "raises AuthorizationError" do
+        expect { tools.rename_card(old_name, new_name) }.to raise_error(
+          Magi::Archive::Mcp::Client::AuthorizationError
+        )
+      end
+    end
+
+    context "when new name already exists" do
+      before do
+        stub_request(:put, card_url)
+          .to_return(
+            status: 422,
+            body: { "error" => "validation_error", "message" => "Name already exists" }.to_json
+          )
+      end
+
+      it "raises ValidationError" do
+        expect { tools.rename_card(old_name, new_name) }.to raise_error(
+          Magi::Archive::Mcp::Client::ValidationError
+        )
+      end
+    end
+  end
+
   describe "#list_types" do
     let(:types_url) { "https://test.example.com/api/mcp/types" }
     let(:types_response) do

@@ -17,6 +17,7 @@ require_relative "../lib/magi/archive/mcp/server/tools/search_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/create_card"
 require_relative "../lib/magi/archive/mcp/server/tools/update_card"
 require_relative "../lib/magi/archive/mcp/server/tools/delete_card"
+require_relative "../lib/magi/archive/mcp/server/tools/rename_card"
 require_relative "../lib/magi/archive/mcp/server/tools/list_children"
 
 # Tag operations
@@ -86,6 +87,7 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::CreateCard,
     Magi::Archive::Mcp::Server::Tools::UpdateCard,
     Magi::Archive::Mcp::Server::Tools::DeleteCard,
+    Magi::Archive::Mcp::Server::Tools::RenameCard,
     Magi::Archive::Mcp::Server::Tools::ListChildren,
 
     # Tag operations
