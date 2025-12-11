@@ -7,7 +7,8 @@ require 'bundler/setup'
 require 'dotenv'
 
 # Load .env file BEFORE any application code to ensure ENV is set
-Dotenv.load(File.join(__dir__, '..', '.env'))
+# Use absolute path to ensure it works regardless of how script is invoked
+Dotenv.load(File.expand_path('../.env', __dir__))
 
 require 'puma'
 require 'mcp'
