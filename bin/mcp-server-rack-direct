@@ -4,6 +4,8 @@
 # Run Puma with pure Rack app - no Sinatra, no rackup, no automatic middleware
 
 require 'bundler/setup'
+require 'dotenv'
+Dotenv.load(File.join(__dir__, '..', '.env'))
 require 'puma'
 require 'mcp'
 require_relative '../lib/magi/archive/mcp'
