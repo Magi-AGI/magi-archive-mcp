@@ -5,7 +5,6 @@
 
 require 'bundler/setup'
 require 'dotenv'
-Dotenv.load(File.join(__dir__, '..', '.env'))
 require 'puma'
 require 'mcp'
 require_relative '../lib/magi/archive/mcp'
@@ -13,6 +12,9 @@ require_relative '../lib/magi/archive/mcp/rack_app'
 
 # Load all tool classes
 Dir[File.join(__dir__, '../lib/magi/archive/mcp/server/tools/**/*.rb')].sort.each { |f| require f }
+
+# Load .env file AFTER all requires to ensure it overrides any defaults
+Dotenv.load(File.join(__dir__, '..', '.env'))
 
 # Get configuration from environment
 PORT = ENV.fetch("MCP_SERVER_PORT", "3002").to_i
