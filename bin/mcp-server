@@ -8,6 +8,10 @@
 
 require "bundler/setup"
 require "mcp"
+
+# Configure JSON Schema validator before loading tools
+require_relative "../lib/magi/archive/mcp/schema_config"
+
 require_relative "../lib/magi/archive/mcp"
 
 # Load all MCP tool classes
@@ -118,10 +122,10 @@ server = ::MCP::Server.new(
 )
 
 # Require the stdio transport
-require "mcp/transports/stdio"
+require "mcp/server/transports/stdio_transport"
 
 # Set up stdio transport
-transport = ::MCP::Transports::StdioTransport.new(server)
+transport = ::MCP::Server::Transports::StdioTransport.new(server)
 
 # Log startup to stderr (stdio is for JSON-RPC communication)
 $stderr.puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
