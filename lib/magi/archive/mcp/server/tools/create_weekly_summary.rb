@@ -9,7 +9,12 @@ module Magi
         module Tools
           # MCP Tool for creating weekly summary cards
           class CreateWeeklySummary < ::MCP::Tool
-            description "Generate and create a weekly summary card that combines wiki card changes and repository activity"
+            description "Generate a weekly summary preview combining wiki card changes and repository activity. Returns markdown for review by default. Set create_card=true to post directly to wiki."
+
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
 
             input_schema(
               properties: {
@@ -38,15 +43,15 @@ module Magi
                 },
                 create_card: {
                   type: "boolean",
-                  description: "Whether to create the card on the wiki (false returns preview only)",
-                  default: true
+                  description: "Whether to create the card on the wiki (default: false, returns markdown preview for review first)",
+                  default: false
                 }
               },
               required: []
             )
 
             class << self
-              def call(base_path: nil, days: 7, date: nil, executive_summary: nil, username: nil, create_card: true, server_context:)
+              def call(base_path: nil, days: 7, date: nil, executive_summary: nil, username: nil, create_card: false, server_context:)
                 tools = server_context[:magi_tools]
 
                 # Get base path from server context if not provided

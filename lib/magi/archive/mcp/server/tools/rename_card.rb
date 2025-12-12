@@ -8,9 +8,9 @@ module Magi
     module Mcp
       module Server
         module Tools
-          # MCP Tool for deleting cards (admin only)
-          class DeleteCard < ::MCP::Tool
-            description "Delete a card from the Magi Archive wiki (requires admin role)"
+          # MCP Tool for renaming cards (admin only)
+          class RenameCard < ::MCP::Tool
+            description "Rename a card in the Magi Archive wiki (requires admin role)"
 
             annotations(
               read_only_hint: true,
@@ -21,26 +21,30 @@ module Magi
               properties: {
                 name: {
                   type: "string",
-                  description: "The name of the card to delete"
+                  description: "The current name of the card to rename"
                 },
-                force: {
+                new_name: {
+                  type: "string",
+                  description: "The new name for the card"
+                },
+                update_referers: {
                   type: "boolean",
-                  description: "Force delete even if card has children",
-                  default: false
+                  description: "Whether to update all references to this card in other cards (default: true)",
+                  default: true
                 }
               },
-              required: ["name"]
+              required: ["name", "new_name"]
             )
 
             class << self
-              def call(name:, force: false, server_context:)
+              def call(name:, new_name:, update_referers: true, server_context:)
                 tools = server_context[:magi_tools]
 
-                result = tools.delete_card(name, force: force)
+                result = tools.rename_card(name, new_name, update_referers: update_referers)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_deletion(name, result)
+                  text: format_rename(result)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -50,7 +54,7 @@ module Magi
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: ErrorFormatter.authorization_error("delete", name, required_role: "admin")
+                  text: ErrorFormatter.authorization_error("rename", name, required_role: "admin")
                 }], error: true)
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
@@ -65,21 +69,27 @@ module Magi
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: ErrorFormatter.generic_error("deleting card '#{name}'", e)
+                  text: ErrorFormatter.generic_error("renaming card '#{name}'", e)
                 }], error: true)
               end
 
               private
 
-              def format_deletion(name, result)
+              def format_rename(result)
                 parts = []
-                parts << "# Card Deleted Successfully"
+                parts << "# Card Renamed Successfully"
                 parts << ""
-                parts << "**Card:** #{name}"
+                parts << "**Old Name:** #{result['old_name']}"
+                parts << "**New Name:** #{result['new_name']}"
                 parts << ""
-                parts << "The card has been permanently deleted from the wiki."
+                parts << "The card has been successfully renamed in the wiki."
                 parts << ""
-                parts << "⚠️ **Warning:** This action cannot be undone."
+
+                if result['updated_referers']
+                  parts << "**References Updated:** All references to the old card name in other cards have been automatically updated."
+                else
+                  parts << "**References Not Updated:** References to the old name in other cards were NOT updated. You may need to update them manually."
+                end
 
                 parts.join("\n")
               end

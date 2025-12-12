@@ -11,6 +11,11 @@ module Magi
           class GetRelationships < ::MCP::Tool
             description "Get relationship information for a card (referers, links, nests, etc.)"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 card_name: {

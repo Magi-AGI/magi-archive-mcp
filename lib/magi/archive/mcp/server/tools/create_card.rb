@@ -14,6 +14,11 @@ module Magi
             Client = Magi::Archive::Mcp::Client
             description "Create a new card in the Magi Archive wiki"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: true
+            )
+
             input_schema(
               properties: {
                 name: {

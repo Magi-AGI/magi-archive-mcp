@@ -14,6 +14,11 @@ module Magi
             Client = Magi::Archive::Mcp::Client
             description "List all child cards of a parent card"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 parent_name: {

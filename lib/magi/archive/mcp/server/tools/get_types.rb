@@ -11,6 +11,11 @@ module Magi
           class GetTypes < ::MCP::Tool
             description "List all card types available in the system"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 limit: {

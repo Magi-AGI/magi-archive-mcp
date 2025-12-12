@@ -13,6 +13,11 @@ module Magi
           class Fetch < ::MCP::Tool
             description "Retrieve complete card content by ID (card name) for detailed analysis and citation. Returns the full text, title, and URL."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 id: {

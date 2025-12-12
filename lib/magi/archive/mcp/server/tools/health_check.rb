@@ -11,6 +11,11 @@ module Magi
           class HealthCheck < ::MCP::Tool
             description "Check if the Magi Archive wiki is operational and responsive. Lightweight health check that doesn't require authentication."
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 detailed: {

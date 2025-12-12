@@ -443,7 +443,7 @@ RSpec.describe "Full API Integration", :integration do
     it "converts HTML to Markdown" do
       html_content = "<h1>Test Heading</h1><p>This is <strong>bold</strong> text.</p><ul><li>Item 1</li><li>Item 2</li></ul>"
 
-      result = tools.render_snippet(html_content, from: :html, to: :markdown)
+      result = tools.convert_content(html_content, from: :html, to: :markdown)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("markdown")
@@ -455,7 +455,7 @@ RSpec.describe "Full API Integration", :integration do
     it "converts Markdown to HTML" do
       markdown_content = "# Test Heading\n\nThis is **bold** text.\n\n- Item 1\n- Item 2"
 
-      result = tools.render_snippet(markdown_content, from: :markdown, to: :html)
+      result = tools.convert_content(markdown_content, from: :markdown, to: :html)
 
       expect(result).to be_a(Hash)
       expect(result).to have_key("html")
@@ -474,7 +474,7 @@ RSpec.describe "Full API Integration", :integration do
         </div>
       HTML
 
-      result = tools.render_snippet(complex_html, from: :html, to: :markdown)
+      result = tools.convert_content(complex_html, from: :html, to: :markdown)
 
       expect(result["markdown"]).to be_a(String)
       expect(result["markdown"]).to include("## Section")
@@ -516,4 +516,54 @@ RSpec.describe "Full API Integration", :integration do
       end
     end
   end
+  describe "Search operations with search_in parameter" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+
+    it "searches with default search_in=both mode" do
+      # Search for a common term that should be in both names and content
+      result = tools.search_cards(q: "card", limit: 5)
+
+      # Should return results (almost any wiki has cards with "card" in name or content)
+      expect(result).to have_key("cards")
+      expect(result["cards"]).to be_an(Array)
+    end
+
+    it "searches in names only when specified" do
+      # Search with explicit search_in=name
+      result = tools.search_cards(q: "Test", search_in: "name", limit: 5)
+
+      expect(result).to have_key("cards")
+      # Results should match cards with "Test" in their name
+    end
+
+    it "searches in content only when specified" do
+      # Search with explicit search_in=content
+      result = tools.search_cards(q: "content", search_in: "content", limit: 5)
+
+      expect(result).to have_key("cards")
+      # Results should match cards with "content" in their content
+    end
+
+    it "finds cards with spaces in names using both modes" do
+      # Create a test card with spaces in name
+      test_name = "Integration Test Card #{Time.now.to_i}"
+      tools.create_card(test_name, content: "Test content for search", type: "RichText")
+
+      begin
+        # Search with spaces (default both mode should find it)
+        result = tools.search_cards(q: test_name.split.first, limit: 50)
+
+        # Should find the card we just created
+        card_names = result["cards"].map { |c| c["name"] }
+        matching = card_names.any? { |name| name.include?(test_name.split.first) }
+
+        expect(matching).to be true
+      ensure
+        # Cleanup
+        tools.delete_card(test_name) rescue nil
+      end
+    end
+  end
+
+
 end

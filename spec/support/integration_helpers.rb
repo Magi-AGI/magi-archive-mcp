@@ -14,14 +14,19 @@ module IntegrationHelpers
 
     ENV["INTEGRATION_TEST"] = "true"
 
-    # Use Card-based API key authentication (not username/password)
-    # Remove username/password if set from .env file
-    ENV.delete("MCP_USERNAME")
-    ENV.delete("MCP_PASSWORD")
+    # Ensure DECKO_API_BASE_URL is set
+    unless ENV["DECKO_API_BASE_URL"]
+      raise "Missing DECKO_API_BASE_URL in .env.production"
+    end
 
-    # Ensure required env vars are set
-    unless ENV["MCP_API_KEY"] && ENV["MCP_ROLE"] && ENV["DECKO_API_BASE_URL"]
-      raise "Missing integration test env vars. Set MCP_API_KEY, MCP_ROLE, and DECKO_API_BASE_URL in .env.production"
+    # Support both authentication methods:
+    # 1. API Key (MCP_API_KEY + MCP_ROLE)
+    # 2. Username/Password (MCP_USERNAME + MCP_PASSWORD)
+    has_api_key = ENV["MCP_API_KEY"] && ENV["MCP_ROLE"]
+    has_username_password = ENV["MCP_USERNAME"] && ENV["MCP_PASSWORD"]
+
+    unless has_api_key || has_username_password
+      raise "Missing authentication credentials. Set either (MCP_API_KEY + MCP_ROLE) or (MCP_USERNAME + MCP_PASSWORD) in .env.production"
     end
   end
 
@@ -32,19 +37,30 @@ module IntegrationHelpers
     ENV.delete("DECKO_API_BASE_URL")
     ENV.delete("MCP_API_KEY")
     ENV.delete("MCP_ROLE")
+    ENV.delete("MCP_USERNAME")
+    ENV.delete("MCP_PASSWORD")
   end
 
   # Get a configured client for integration tests
   def integration_client(role: "admin")
-    # Set the role for this client
-    ENV["MCP_ROLE"] = role
+    # If using username/password, role is determined by the account
+    # If using API key, set the role explicitly
+    if ENV["MCP_API_KEY"]
+      ENV["MCP_ROLE"] = role
+    end
 
-    # Create and return client (will use MCP_API_KEY from environment)
+    # Create and return client (will use either MCP_API_KEY or MCP_USERNAME/MCP_PASSWORD)
     Magi::Archive::Mcp::Client.new
   end
 
   # Wait for server to be ready
   def wait_for_server(timeout: 30)
+    # In production environment, assume the server is ready
+    # The integration tests will fail quickly if the API is not responding
+    # This avoids the issue of checking for a /health endpoint that doesn't exist
+    return true if ENV["DECKO_API_BASE_URL"]&.include?("wiki.magi-agi.org")
+
+    # For other environments, try to verify server is up
     require "http"
 
     url = ENV["DECKO_API_BASE_URL"] || "https://wiki.magi-agi.org/api/mcp"
@@ -52,10 +68,13 @@ module IntegrationHelpers
 
     loop do
       begin
-        response = HTTP.timeout(2).get("#{url}/health")
-        return true if response.status == 200
-      rescue StandardError
-        # Server not ready yet
+        # Try to create a client and make a simple API call
+        client = Magi::Archive::Mcp::Client.new
+        client.get_card("Home")
+        return true
+      rescue StandardError => e
+        # Server not ready yet or other error
+        puts "Waiting for server... (#{e.class}: #{e.message})"
       end
 
       if Time.now - start_time > timeout

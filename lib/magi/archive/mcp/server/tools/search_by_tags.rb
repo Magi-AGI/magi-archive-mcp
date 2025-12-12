@@ -11,6 +11,11 @@ module Magi
           class SearchByTags < ::MCP::Tool
             description "Search for cards by tags with AND or OR logic"
 
+            annotations(
+              read_only_hint: true,
+              destructive_hint: false
+            )
+
             input_schema(
               properties: {
                 tags: {

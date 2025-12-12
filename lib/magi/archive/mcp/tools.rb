@@ -117,21 +117,45 @@ module Magi
         #
         # Automatically handles pagination and returns all matching cards.
         # Use with caution on large result sets.
+        # Optionally yields each card to a block for iteration.
         #
         # @param q [String, nil] search query
         # @param type [String, nil] filter by card type
-        # @param limit [Integer] page size for fetching (default: 50)
-        # @return [Array<Hash>] array of all matching cards
+        # @param limit [Integer] maximum total results (default: 50)
+        # @param offset [Integer] starting offset (default: 0)
+        # @yield [Hash] each card if block given
+        # @return [Array<Hash>] array of all matching cards if no block given
         #
-        # @example
+        # @example Without block
         #   all_users = tools.fetch_all_cards(type: "User")
         #   puts "Found #{all_users.length} users"
-        def fetch_all_cards(q: nil, type: nil, limit: 50)
+        #
+        # @example With block (memory efficient for large sets)
+        #   tools.fetch_all_cards(type: "User", limit: 100) do |user|
+        #     puts user["name"]
+        #   end
+        def fetch_all_cards(q: nil, type: nil, limit: 50, offset: 0, &block)
           params = {}
           params[:q] = q if q
           params[:type] = type if type
 
-          client.fetch_all("/cards", limit: limit, **params)
+          # Cap limit at 100 to prevent excessive fetching
+          effective_limit = [limit, 100].min
+
+          # When limit is specified, collect only up to that many cards
+          cards = []
+          each_card_page(**params, limit: effective_limit, offset: offset) do |page|
+            page_cards = page["cards"] || []
+            remaining = effective_limit - cards.length
+            cards.concat(page_cards.take(remaining))
+            break if cards.length >= effective_limit
+          end
+
+          if block_given?
+            cards.each(&block)
+          else
+            cards
+          end
         end
 
         # Iterate over card search results page by page
@@ -142,19 +166,48 @@ module Magi
         # @param q [String, nil] search query
         # @param type [String, nil] filter by card type
         # @param limit [Integer] page size (default: 50)
-        # @yield [Array<Hash>] each page of cards
+        # @param max_pages [Integer, nil] maximum number of pages to fetch (default: unlimited)
+        # @yield [Hash] each page response with cards array and metadata
         # @return [Enumerator] if no block given
         #
         # @example
         #   tools.each_card_page(type: "User", limit: 20) do |page|
-        #     page.each { |user| puts user["name"] }
+        #     page["cards"].each { |user| puts user["name"] }
         #   end
-        def each_card_page(q: nil, type: nil, limit: 50, &)
+        #
+        # @example With page limit
+        #   tools.each_card_page(type: "User", limit: 20, max_pages: 5) do |page|
+        #     puts "Page has #{page['cards'].length} cards"
+        #   end
+        def each_card_page(q: nil, type: nil, limit: 50, offset: 0, max_pages: nil, &block)
           params = {}
           params[:q] = q if q
           params[:type] = type if type
 
-          client.each_page("/cards", limit: limit, **params, &)
+          page_count = 0
+          current_offset = offset
+          loop do
+            page_data = client.paginated_get("/cards", limit: limit, offset: current_offset, **params)
+            items = page_data[:data]
+
+            break if items.nil? || items.empty?
+
+            page_count += 1
+
+            # Yield full page hash with metadata (string keys for compatibility)
+            yield({
+              "cards" => items,
+              "total" => page_data[:total],
+              "offset" => page_data[:offset],
+              "limit" => page_data[:limit]
+            }) if block_given?
+
+            break if max_pages && page_count >= max_pages
+
+            # Move to next page
+            current_offset = page_data[:next_offset] || (page_data[:offset] + items.length)
+            break if page_data[:next_offset].nil? && items.length < limit
+          end
         end
 
         # Create a new card
@@ -242,6 +295,35 @@ module Magi
           client.delete(path)
         end
 
+        # Rename a card (admin only)
+        #
+        # Changes the name of an existing card. This is an admin-only operation.
+        # Requires admin role permissions.
+        #
+        # @param name [String] current name of the card
+        # @param new_name [String] new name for the card
+        # @param update_referers [Boolean] whether to update all references to the card (default: true)
+        # @return [Hash] rename result with old_name, new_name, status, updated_referers, and updated card data
+        #
+        # @example Rename a card and update all references
+        #   result = tools.rename_card("Old Card Name", "New Card Name")
+        #   puts "Renamed '#{result['old_name']}' to '#{result['new_name']}'"
+        #   puts "Updated referers: #{result['updated_referers']}"
+        #
+        # @example Rename without updating references
+        #   result = tools.rename_card("Old Card Name", "New Card Name", update_referers: false)
+        #
+        # @example Error handling
+        #   begin
+        #     tools.rename_card("NonExistent", "NewName")
+        #   rescue => e
+        #     puts "Rename failed: #{e.message}"
+        #   end
+        def rename_card(name, new_name, update_referers: true)
+          path = "/cards/#{encode_card_name(name)}/rename"
+          client.put(path, new_name: new_name, update_referers: update_referers)
+        end
+
         # Run spoiler scan job
         #
         # Scans for spoiler terms leaking from GM/AI content to player content.
@@ -291,37 +373,51 @@ module Magi
         # Get all types
         #
         # Fetches all card types across all pages.
+        # Optionally yields each type to a block for iteration.
         #
-        # @return [Array<Hash>] array of all card types
+        # @param limit [Integer] maximum total results (default: 100)
+        # @yield [Hash] each type if block given
+        # @return [Array<Hash>] array of all card types if no block given
         #
-        # @example
+        # @example Without block
         #   all_types = tools.fetch_all_types
         #   puts "Found #{all_types.length} card types"
-        def fetch_all_types
-          client.fetch_all("/types", limit: 50)
+        #
+        # @example With block
+        #   tools.fetch_all_types(limit: 50) do |type|
+        #     puts type["name"]
+        #   end
+        def fetch_all_types(limit: 100, &block)
+          types = client.fetch_all("/types", limit: limit)
+
+          if block_given?
+            types.each(&block)
+          else
+            types
+          end
         end
 
-        # Render snippet with format conversion
+        # Convert content between HTML and Markdown formats
         #
-        # Converts content between HTML and Markdown formats.
+        # Converts content between HTML and Markdown using the server API.
         # Per MCP-SPEC.md lines 39-40:
         #   - HTML→Markdown: POST /api/mcp/render → returns { markdown:, format: "gfm" }
         #   - Markdown→HTML: POST /api/mcp/render/markdown → returns { html:, format: "html" }
         #
-        # @param content [String] the content to render
+        # @param content [String] the content to convert
         # @param from [Symbol] source format (:html or :markdown)
         # @param to [Symbol] target format (:html or :markdown)
         # @return [Hash] server response with markdown: or html: key
         # @raise [ArgumentError] if from/to formats are invalid or the same
         #
         # @example HTML to Markdown
-        #   result = tools.render_snippet("<p>Hello <strong>world</strong></p>", from: :html, to: :markdown)
+        #   result = tools.convert_content("<p>Hello <strong>world</strong></p>", from: :html, to: :markdown)
         #   # => { "markdown" => "Hello **world**", "format" => "gfm" }
         #
         # @example Markdown to HTML
-        #   result = tools.render_snippet("Hello **world**", from: :markdown, to: :html)
+        #   result = tools.convert_content("Hello **world**", from: :markdown, to: :html)
         #   # => { "html" => "<p>Hello <strong>world</strong></p>", "format" => "html" }
-        def render_snippet(content, from:, to:)
+        def convert_content(content, from:, to:)
           valid_formats = %i[html markdown]
           unless valid_formats.include?(from) && valid_formats.include?(to)
             raise ArgumentError, "Format must be :html or :markdown"
@@ -342,6 +438,36 @@ module Magi
           payload = { content: content }
 
           client.post(endpoint, **payload)
+        end
+
+        # Render a snippet of content with optional truncation
+        #
+        # Truncates long content to a specified length and adds ellipsis.
+        # Useful for generating previews or summaries.
+        #
+        # @param content [String] the content to truncate
+        # @param length [Integer] maximum length (default: 100)
+        # @return [String] truncated content with ellipsis if needed
+        #
+        # @example Truncate long content
+        #   snippet = tools.render_snippet("A" * 100, length: 20)
+        #   # => "AAAAAAAAAAAAAAAAAAAA..."
+        #
+        # @example Short content unchanged
+        #   snippet = tools.render_snippet("Short", length: 50)
+        #   # => "Short"
+        #
+        # @example Handle HTML content
+        #   snippet = tools.render_snippet("<p>HTML content</p>", length: 10)
+        #   # => "<p>HTML co..."
+        def render_snippet(content, length: 100)
+          return "" if content.nil? || content.empty?
+
+          if content.length <= length
+            content
+          else
+            content[0...length] + "..."
+          end
         end
 
         # Execute batch operations on multiple cards
@@ -421,221 +547,6 @@ module Magi
         # === Validation Operations ===
 
         # Validate tags for a card
-        #
-        # Checks if the provided tags meet the requirements for the card type.
-        # Returns validation errors and warnings.
-        #
-        # @param type [String] the card type
-        # @param tags [Array<String>] the tags to validate
-        # @param content [String, nil] optional card content for content-based suggestions
-        # @param name [String, nil] optional card name for naming convention checks
-        # @return [Hash] validation result with valid, errors, warnings keys
-        #
-        # @example
-        #   result = tools.validate_card_tags(
-        #     "Game Master Document",
-        #     ["Game", "Species"],
-        #     content: "This is GM-only content",
-        #     name: "Secret Plot+GM"
-        #   )
-        #   if result["valid"]
-        #     puts "Tags are valid!"
-        #   else
-        #     puts "Errors: #{result['errors'].join(', ')}"
-        #   end
-        def validate_card_tags(type, tags, content: nil, name: nil)
-          payload = { type: type, tags: tags }
-          payload[:content] = content if content
-          payload[:name] = name if name
-
-          client.post("/validation/tags", **payload)
-        end
-
-        # Validate card structure
-        #
-        # Checks if the card structure meets the requirements for the card type.
-        # Returns validation errors and warnings about missing children.
-        #
-        # @param type [String] the card type
-        # @param name [String, nil] the card name
-        # @param has_children [Boolean] whether the card will have children
-        # @param children_names [Array<String>] names of planned children
-        # @return [Hash] validation result with valid, errors, warnings keys
-        #
-        # @example
-        #   result = tools.validate_card_structure(
-        #     "Species",
-        #     name: "Vulcans",
-        #     has_children: true,
-        #     children_names: ["Vulcans+traits", "Vulcans+description"]
-        #   )
-        #   puts "Warnings: #{result['warnings'].join(', ')}" if result['warnings'].any?
-        def validate_card_structure(type, name: nil, has_children: false, children_names: [])
-          payload = {
-            type: type,
-            has_children: has_children,
-            children_names: children_names
-          }
-          payload[:name] = name if name
-
-          client.post("/validation/structure", **payload)
-        end
-
-        # Get requirements for a card type
-        #
-        # Returns the tag and structure requirements for a specific card type.
-        #
-        # @param type [String] the card type
-        # @return [Hash] requirements with required_tags, suggested_tags, required_children, suggested_children
-        #
-        # @example
-        #   reqs = tools.get_type_requirements("Species")
-        #   puts "Required tags: #{reqs['required_tags'].join(', ')}"
-        #   puts "Suggested children: #{reqs['suggested_children'].join(', ')}"
-        def get_type_requirements(type)
-          client.get("/validation/requirements/#{type}")
-        end
-
-        # Create card with validation
-        #
-        # Validates tags and structure before creating a card.
-        # Returns validation errors if validation fails.
-        #
-        # @param name [String] the card name
-        # @param content [String, nil] the card content
-        # @param type [String, nil] the card type
-        # @param tags [Array<String>] tags for the card
-        # @param validate [Boolean] whether to validate before creating (default: true)
-        # @param metadata [Hash] additional card metadata
-        # @return [Hash] created card data or validation errors
-        #
-        # @example
-        #   result = tools.create_card_with_validation(
-        #     "New Species",
-        #     type: "Species",
-        #     tags: ["Game", "Alien"],
-        #     content: "A new alien species"
-        #   )
-        def create_card_with_validation(name, content: nil, type: nil, tags: [], validate: true, **metadata)
-          if validate && type
-            # Validate tags first
-            validation = validate_card_tags(type, tags, content: content, name: name)
-
-            unless validation["valid"]
-              return {
-                "status" => "validation_failed",
-                "errors" => validation["errors"],
-                "warnings" => validation["warnings"]
-              }
-            end
-
-            # Log warnings if any
-            if validation["warnings"]&.any?
-              warn "Validation warnings: #{validation['warnings'].join(', ')}"
-            end
-          end
-
-          # Use batch operations with transactional mode for atomic creation
-          # This ensures both card and tags are created together or not at all
-          operations = []
-
-          # Main card creation
-          operations << {
-            action: "create",
-            name: name,
-            content: content,
-            type: type
-          }.merge(metadata).compact
-
-          # Add tags card if tags provided
-          if tags.any?
-            tags_content = tags.map { |tag| "[[#{tag}]]" }.join("\n")
-            operations << {
-              action: "create",
-              name: "#{name}+tags",
-              content: tags_content,
-              type: "Pointer"
-            }
-          end
-
-          # Execute as atomic transaction
-          begin
-            result = batch_operations(operations, mode: "transactional")
-
-            # Return the main card from batch results
-            main_card_result = result["results"]&.first
-            return main_card_result["card"] if main_card_result&.dig("status") == "success"
-
-            # If batch failed, return error details
-            {
-              "status" => "error",
-              "message" => result["message"] || "Failed to create card with tags",
-              "errors" => result["results"]&.map { |r| r["error"] }&.compact || []
-            }
-          rescue Client::APIError => e
-            # Handle batch transaction failure
-            {
-              "status" => "error",
-              "message" => e.message,
-              "errors" => e.details&.dig("results")&.map { |r| r["error"] }&.compact || [e.message]
-            }
-          end
-        end
-
-        # Get structure recommendations for a card
-        #
-        # Returns comprehensive structure recommendations including:
-        # - Recommended child cards
-        # - Suggested tags
-        # - Naming conventions
-        #
-        # @param type [String] the card type
-        # @param name [String] the card name
-        # @param tags [Array<String>] proposed tags
-        # @param content [String] proposed content
-        # @return [Hash] recommendations with children, tags, naming sections
-        #
-        # @example
-        #   recs = tools.recommend_card_structure(
-        #     "Species",
-        #     "Vulcans",
-        #     tags: ["Star Trek", "Humanoid"],
-        #     content: "Logical and stoic species..."
-        #   )
-        #   recs["children"].each { |child| puts "Create: #{child['name']}" }
-        def recommend_card_structure(type, name, tags: [], content: "")
-          payload = {
-            type: type,
-            name: name,
-            tags: tags,
-            content: content
-          }
-
-          client.post("/validation/recommend_structure", **payload)
-        end
-
-        # Suggest improvements for an existing card
-        #
-        # Analyzes an existing card and suggests structural improvements:
-        # - Missing required children
-        # - Missing required tags
-        # - Suggested additions
-        # - Naming issues
-        #
-        # @param card_name [String] the card name to analyze
-        # @return [Hash] improvement suggestions
-        #
-        # @example
-        #   improvements = tools.suggest_card_improvements("Vulcans")
-        #   puts improvements["summary"]
-        #   improvements["missing_children"].each do |child|
-        #     puts "Missing: #{child['suggestion']}"
-        #   end
-        def suggest_card_improvements(card_name)
-          client.post("/validation/suggest_improvements", name: card_name)
-        end
-
-        # === Tag Search Operations ===
 
         # Search cards by tag
         #
@@ -645,14 +556,15 @@ module Magi
         # @param tag_name [String] the tag to search for
         # @param limit [Integer] maximum results (default: 50)
         # @param offset [Integer] starting offset (default: 0)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching the tag
         #
         # @example
         #   results = tools.search_by_tag("Article")
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tag(tag_name, limit: 50, offset: 0)
           # Search for cards with +tags subcard containing the tag
-          search_cards(q: "tags:#{tag_name}", limit: limit, offset: offset)
+          result = search_cards(q: "tags:#{tag_name}", limit: limit, offset: offset)
+          result["cards"] || []
         end
 
         # Search cards by multiple tags (AND logic)
@@ -662,15 +574,16 @@ module Magi
         # @param tags [Array<String>] tags to search for
         # @param limit [Integer] maximum results (default: 50)
         # @param offset [Integer] starting offset (default: 0)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching all tags
         #
         # @example
         #   results = tools.search_by_tags(["Article", "Published"])
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tags(tags, limit: 50, offset: 0)
           # Search using tag query for each tag (AND logic)
           query = tags.map { |tag| "tags:#{tag}" }.join(" AND ")
-          search_cards(q: query, limit: limit, offset: offset)
+          result = search_cards(q: query, limit: limit, offset: offset)
+          result["cards"] || []
         end
 
         # Get all tags used in the system
@@ -748,15 +661,16 @@ module Magi
         #
         # @param tags [Array<String>] tags to search for
         # @param limit [Integer] maximum results (default: 50)
-        # @return [Hash] search results with cards array
+        # @return [Array<Hash>] array of cards matching any tag
         #
         # @example
         #   results = tools.search_by_tags_any(["Article", "Draft"])
-        #   results["cards"].each { |card| puts card["name"] }
+        #   results.each { |card| puts card["name"] }
         def search_by_tags_any(tags, limit: 50)
           # Search using tag query for any tag (OR logic)
           query = tags.map { |tag| "tags:#{tag}" }.join(" OR ")
-          search_cards(q: query, limit: limit)
+          result = search_cards(q: query, limit: limit)
+          result["cards"] || []
         end
 
         # === Card Relationship Operations ===
@@ -767,14 +681,15 @@ module Magi
         # Includes both explicit links [[CardName]] and nests {{CardName}}.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, referers (array), referer_count
+        # @return [Array<Hash>] array of cards that reference this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_referers("Main Page")
-        #   result["referers"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_referers(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/referers")
+          response = client.get("/cards/#{encode_card_name(card_name)}/referers")
+          response["referers"] || []
         end
 
         # Get cards that nest/include this card
@@ -782,14 +697,15 @@ module Magi
         # Returns cards that include this card using nest syntax {{CardName}}.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, nested_in (array), nested_in_count
+        # @return [Array<Hash>] array of cards that nest this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_nested_in("Template Card")
-        #   result["nested_in"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_nested_in(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/nested_in")
+          response = client.get("/cards/#{encode_card_name(card_name)}/nested_in")
+          response["nested_in"] || []
         end
 
         # Get cards that this card nests/includes
@@ -797,14 +713,15 @@ module Magi
         # Returns cards that are nested in this card using {{CardName}} syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, nests (array), nests_count
+        # @return [Array<Hash>] array of cards nested in this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_nests("Main Page")
-        #   result["nests"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_nests(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/nests")
+          response = client.get("/cards/#{encode_card_name(card_name)}/nests")
+          response["nests"] || []
         end
 
         # Get cards that this card links to
@@ -812,14 +729,15 @@ module Magi
         # Returns cards that are linked from this card using [[CardName]] syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, links (array), links_count
+        # @return [Array<Hash>] array of cards this card links to
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_links("Main Page")
-        #   result["links"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_links(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/links")
+          response = client.get("/cards/#{encode_card_name(card_name)}/links")
+          response["links"] || []
         end
 
         # Get cards that link to this card
@@ -827,14 +745,15 @@ module Magi
         # Returns cards that link to this card using [[CardName]] syntax.
         #
         # @param card_name [String] the card name
-        # @return [Hash] with keys: card, linked_by (array), linked_by_count
+        # @return [Array<Hash>] array of cards that link to this card
         # @raise [Client::NotFoundError] if card doesn't exist
         #
         # @example
         #   result = tools.get_linked_by("Main Page")
-        #   result["linked_by"].each { |card| puts card["name"] }
+        #   result.each { |card| puts card["name"] }
         def get_linked_by(card_name)
-          client.get("/cards/#{encode_card_name(card_name)}/linked_by")
+          response = client.get("/cards/#{encode_card_name(card_name)}/linked_by")
+          response["linked_by"] || []
         end
 
         # === Admin Operations ===
@@ -857,10 +776,10 @@ module Magi
           response = client.get_raw("/admin/database/backup")
 
           if save_path
-            File.write(save_path, response.body)
+            File.write(save_path, response.body.to_s)
             save_path
           else
-            response.body
+            response.body.to_s
           end
         end
 
@@ -901,10 +820,10 @@ module Magi
           response = client.get_raw("/admin/database/backup/download/#{filename}")
 
           if save_path
-            File.write(save_path, response.body)
+            File.write(save_path, response.body.to_s)
             save_path
           else
-            response.body
+            response.body.to_s
           end
         end
 
@@ -924,8 +843,6 @@ module Magi
           client.delete("/admin/database/backup/#{filename}")
         end
 
-        private
-
         # Parse tags from content string
         #
         # Extracts tag names from various Decko tag formats:
@@ -934,17 +851,20 @@ module Magi
         #
         # @param content [String] the content to parse
         # @return [Array<String>] extracted tag names
+        #
+        # @example Extract tags from pointer format
+        #   tags = tools.parse_tags_from_content("[[tag1]] and [[tag2]]")
+        #   # => ["tag1", "tag2"]
+        #
+        # @example Extract tags from line-separated format
+        #   tags = tools.parse_tags_from_content("tag1\ntag2\ntag3")
+        #   # => ["tag1", "tag2", "tag3"]
         def parse_tags_from_content(content)
           tags = []
 
-          # Extract [[...]] format
+          # Extract [[...]] format only
           content.scan(/\[\[([^\]]+)\]\]/) do |match|
             tags << match[0].strip
-          end
-
-          # If no bracket tags found, try line-separated
-          if tags.empty?
-            tags = content.split(/[\n,]/).map(&:strip).reject(&:empty?)
           end
 
           tags.uniq
@@ -957,6 +877,161 @@ module Magi
         #
         # @param name [String] the card name
         # @return [String] URL-encoded name
+        #
+        # @example Encode spaces
+        #   tools.encode_card_name("Test Card Name")
+        #   # => "Test%20Card%20Name"
+        #
+        # @example Preserve plus for compound cards
+        #   tools.encode_card_name("Parent+Child")
+        #   # => "Parent+Child"
+        #
+        # @example Encode special characters
+        #   tools.encode_card_name("Test & Special / Characters")
+        #   # => "Test%20%26%20Special%20%2F%20Characters"
+        # Normalize card name to Decko format (spaces to underscores)
+        def normalize_card_name(name)
+          name.gsub(" ", "_")
+        end
+
+        # Search for cards and replace text in their content
+        #
+        # This is a convenience method that combines search and batch update operations.
+        # It searches for cards containing a pattern, then replaces text across all matches.
+        #
+        # @param search_pattern [String, Regexp] Text or regex pattern to find in card content
+        # @param replace_with [String] Replacement text
+        # @param options [Hash] Search and replace options
+        # @option options [String] :card_name_pattern Optional pattern to filter card names
+        # @option options [String] :type Optional card type filter
+        # @option options [Boolean] :regex (false) Treat search_pattern as regex
+        # @option options [Boolean] :case_sensitive (true) Case-sensitive search
+        # @option options [Integer] :limit (50) Max cards to update in single operation
+        # @option options [Boolean] :dry_run (false) Preview changes without applying
+        # @option options [String] :mode ("per_item") Batch mode: "per_item" or "transactional"
+        #
+        # @return [Hash] Results with :preview (dry run) or :updated (actual changes)
+        #
+        # @example Simple text replacement
+        #   results = tools.search_and_replace("old text", "new text")
+        #
+        # @example Regex replacement with type filter
+        #   results = tools.search_and_replace(
+        #     /(foo|bar)/,
+        #     "baz",
+        #     type: "RichText",
+        #     regex: true
+        #   )
+        #
+        # @example Dry run to preview changes
+        #   preview = tools.search_and_replace(
+        #     "deprecated",
+        #     "updated",
+        #     dry_run: true
+        #   )
+        def search_and_replace(search_pattern, replace_with, **options)
+          # Extract options with defaults
+          card_name_pattern = options[:card_name_pattern]
+          type = options[:type]
+          use_regex = options.fetch(:regex, false)
+          case_sensitive = options.fetch(:case_sensitive, true)
+          limit = options.fetch(:limit, 50)
+          dry_run = options.fetch(:dry_run, false)
+          mode = options.fetch(:mode, "per_item")
+
+          # Build search query to find cards with matching content
+          search_params = { search_in: "content", limit: limit }
+          
+          # For regex patterns, we need to fetch cards and filter manually
+          # For simple text, we can use the content search
+          if use_regex
+            # Fetch all cards of specified type and filter in Ruby
+            fetch_params = { limit: 100 }
+            fetch_params[:type] = type if type
+            all_cards = fetch_all_cards(**fetch_params)
+            
+            regex = case_sensitive ? Regexp.new(search_pattern.to_s) : Regexp.new(search_pattern.to_s, Regexp::IGNORECASE)
+            matching_cards = all_cards.select { |card| card["content"] =~ regex }
+          else
+            # Use server-side content search for simple text patterns
+            search_params[:q] = search_pattern
+            search_params[:type] = type if type
+            search_result = search_cards(**search_params)
+            matching_cards = search_result["cards"] || []
+          end
+
+          # Filter by card name pattern if provided
+          if card_name_pattern
+            name_regex = Regexp.new(card_name_pattern)
+            matching_cards = matching_cards.select { |card| card["name"] =~ name_regex }
+          end
+
+          # Limit results
+          matching_cards = matching_cards.take(limit)
+
+          return { preview: [], message: "No matching cards found" } if matching_cards.empty?
+
+          # Prepare replacement operations
+          operations = matching_cards.map do |card|
+            # Fetch full card content
+            full_card_response = get_card(card["name"])
+            full_card = full_card_response["card"] || full_card_response
+            original_content = full_card["content"] || ""
+            
+            # Perform replacement
+            new_content = if use_regex
+                           regex = case_sensitive ? Regexp.new(search_pattern.to_s) : Regexp.new(search_pattern.to_s, Regexp::IGNORECASE)
+                           original_content.gsub(regex, replace_with)
+                         else
+                           if case_sensitive
+                             original_content.gsub(search_pattern, replace_with)
+                           else
+                             original_content.gsub(/#{Regexp.escape(search_pattern)}/i, replace_with)
+                           end
+                         end
+
+            # Skip if no changes
+            next nil if original_content == new_content
+
+            {
+              card_name: card["name"],
+              original_content: original_content,
+              new_content: new_content,
+              operation: {
+                action: "update",
+                name: card["name"],
+                content: new_content
+              }
+            }
+          end.compact
+
+          return { preview: [], message: "No changes needed" } if operations.empty?
+
+          # Return preview for dry run
+          if dry_run
+            return {
+              preview: operations.map do |op|
+                {
+                  card_name: op[:card_name],
+                  changes: "Content will be updated (#{op[:original_content].length} → #{op[:new_content].length} chars)"
+                }
+              end,
+              total_cards: operations.size,
+              message: "Dry run complete. Use dry_run: false to apply changes."
+            }
+          end
+
+          # Execute batch update
+          batch_ops = operations.map { |op| op[:operation] }
+          result = batch_operations(batch_ops, mode: mode)
+
+          {
+            updated: operations.map { |op| op[:card_name] },
+            total_cards: operations.size,
+            batch_result: result
+          }
+        end
+
         def encode_card_name(name)
           # Encode all characters except: A-Z a-z 0-9 - _ . ~ +
           # Keep + literal for Decko compound cards (e.g., "Parent+Child")
@@ -968,6 +1043,8 @@ module Magi
             end
           end.join
         end
+
+        private
 
       public
 
@@ -1144,23 +1221,24 @@ module Magi
       # @param date [String, nil] date string for card name (default: today)
       # @param executive_summary [String, nil] custom executive summary
       # @param parent [String] parent card name (default: "Home")
-      # @param create_card [Boolean] whether to create the card (default: true, false returns content only)
-      # @return [Hash, String] created card data or markdown content if create_card is false
+      # @param create_card [Boolean] whether to create the card (default: false, returns markdown for review)
+      # @return [Hash, String] created card data if create_card=true, or markdown content for preview if false
       #
-      # @example Create this week's summary
-      #   card = tools.create_weekly_summary
+      # @example Generate summary for review (default behavior)
+      #   markdown = tools.create_weekly_summary
+      #   puts markdown  # Review the content first
+      #
+      # @example Create and post summary directly
+      #   card = tools.create_weekly_summary(create_card: true)
       #
       # @example Create summary for specific period
       #   card = tools.create_weekly_summary(
       #     days: 7,
       #     date: "2025 12 09",
-      #     executive_summary: "Focused on MCP API Phase 2.1 completion..."
+      #     executive_summary: "Focused on MCP API Phase 2.1 completion...",
+      #     create_card: true  # Explicitly create the card
       #   )
-      #
-      # @example Generate content without creating card
-      #   markdown = tools.create_weekly_summary(create_card: false)
-      #   puts markdown
-      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Weekly Work Summaries", create_card: true, username: nil)
+      def create_weekly_summary(base_path: nil, days: 7, date: nil, executive_summary: nil, parent: "Weekly Work Summaries", create_card: false, username: nil)
         # Get username from Decko authentication if not provided
         username ||= client.username || "Unknown User"
 
@@ -1383,6 +1461,195 @@ module Magi
       rescue StandardError => e
         # Log error but don't fail the whole operation
         warn "Failed to update TOC: #{e.message}"
+      end
+
+      public
+
+      # Get site context information for AI agents
+      #
+      # Returns structured information about the wiki's hierarchy, organization,
+      # and content placement guidelines to help AI agents understand where to
+      # find content and where to place new content.
+      #
+      # @return [Hash] Site context with hierarchy, sections, and guidelines
+      #
+      # @example Get site context
+      #   context = tools.get_site_context
+      #   puts context[:hierarchy]
+      #   puts context[:guidelines]
+      def get_site_context
+        {
+          wiki_name: "Magi Archive",
+          wiki_url: "https://wiki.magi-agi.org",
+          description: "Knowledge base for Magi-AGI projects including games, business plans, AI research, and notes",
+
+          hierarchy: {
+            "Home" => {
+              description: "Main landing page with table of contents",
+              sections: [
+                "Overview",
+                "Weekly Work Summaries",
+                "Business Plan",
+                "Neoterics",
+                "Games",
+                "Notes"
+              ]
+            },
+            "Games" => {
+              description: "Game projects and worldbuilding",
+              games: [
+                {
+                  name: "Gods Game",
+                  path: "Games+Gods Game",
+                  description: "Pantheon-based game"
+                },
+                {
+                  name: "Inkling",
+                  path: "Games+Inkling",
+                  description: "Inkling game project"
+                },
+                {
+                  name: "Ledge Board Game",
+                  path: "Games+Ledge Board Game",
+                  description: "Board game project"
+                },
+                {
+                  name: "Butterfly Galaxii",
+                  path: "Games+Butterfly Galaxii",
+                  description: "Primary sci-fi RPG with extensive worldbuilding",
+                  sections: [
+                    "Preface",
+                    "Introduction",
+                    "Player Docs (Player+...)",
+                    "GM Docs (GM Docs+...)",
+                    "AI Docs (AI Docs+...)"
+                  ],
+                  key_areas: {
+                    "Factions" => "Games+Butterfly Galaxii+Player+Factions",
+                    "Species" => "Games+Butterfly Galaxii+Player+Species",
+                    "Cultures" => "Games+Butterfly Galaxii+Player+Cultures",
+                    "Tech" => "Games+Butterfly Galaxii+Player+Tech"
+                  }
+                }
+              ]
+            },
+            "Business Plan" => {
+              description: "Business planning and strategy documents",
+              path: "Business Plan"
+            },
+            "Neoterics" => {
+              description: "AI/AGI research and frameworks (MAGUS, MeTTa, OpenPsi)",
+              path: "Neoterics"
+            },
+            "Notes" => {
+              description: "General notes and miscellaneous content",
+              path: "Notes"
+            }
+          },
+
+          guidelines: {
+            naming_conventions: [
+              "Use '+' to create hierarchical card names (e.g., 'Games+Butterfly Galaxii+Player+Species')",
+              "Card names are case-sensitive",
+              "Use spaces in card names, not underscores (MCP tools handle encoding)",
+              "Avoid creating 'virtual cards' - prefer placing content in full hierarchical paths"
+            ],
+
+            content_placement: [
+              "Place game content under appropriate game (e.g., 'Games+Butterfly Galaxii+...')",
+              "Use Player/GM/AI Docs hierarchy within games for role-specific content",
+              "Player Docs: publicly visible content for players",
+              "GM Docs: game master notes, hidden from players",
+              "AI Docs: instructions and context for AI agents",
+              "Check for existing '+GM+AI' cards in a section for AI-specific guidance (like CLAUDE.md files)",
+              "Business content goes under 'Business Plan'",
+              "AI research goes under 'Neoterics'",
+              "Miscellaneous content goes under 'Notes'"
+            ],
+
+            content_structure: [
+              "Major sections should have a '+table-of-contents' child card",
+              "Use '+intro' or '+Preface' for introductory content",
+              "Keep table-of-contents cards updated when adding new subsections",
+              "Use RichText type for most content cards",
+              "Use Pointer type for cards that reference other cards",
+              "Search cards contain dynamic queries, not static results"
+            ],
+
+            special_cards: [
+              "Virtual cards: Empty junction cards that exist for naming - actual content is in compound child cards",
+              "Pointer cards: Contain references to other cards (use list_children to see them)",
+              "Search cards: Content shows query, results are dynamic",
+              "+GM+AI cards: Look for these in sections for AI-specific instructions and context",
+              "Deleted cards: Marked as trash in database, filtered from normal results. To restore: create new card with same name, then access history tab on wiki to restore previous content (no automated API yet)"
+            ],
+
+            best_practices: [
+              "IMPORTANT: Before working in a section, check for a '+GM+AI' card (e.g., 'Games+Butterfly Galaxii+GM+AI') - these contain AI-specific instructions similar to CLAUDE.md files",
+              "Always search for existing content before creating new cards",
+              "Check parent card's +table-of-contents before adding new sections",
+              "Use search_cards with search_in: 'both' for comprehensive searches",
+              "Virtual cards are usually empty - look for compound child cards with full paths",
+              "When in doubt about placement, check the Home+table-of-contents hierarchy",
+              "For any major section or game, look for '<Section>+GM+AI' cards that provide context-specific guidance"
+            ]
+          },
+
+          common_patterns: {
+            game_content: "Games+<GameName>+<PlayerGMAI>+<Section>+<Subsection>+<CardName>",
+            business: "Business Plan+<Section>+<CardName>",
+            research: "Neoterics+<Topic>+<CardName>",
+            notes: "Notes+<Category>+<CardName>"
+          },
+
+          helpful_cards: [
+            "Home+table-of-contents - Main navigation structure",
+            "Games+table-of-contents - All game projects",
+            "Games+Butterfly Galaxii+table-of-contents - Main RPG structure",
+            "Games+Butterfly Galaxii+AI Docs+table-of-contents - AI agent guidance for BG"
+          ]
+        }
+      end
+
+      # Find and retrieve +GM+AI instruction card for a section
+      #
+      # Checks if a section has a +GM+AI card that contains AI-specific
+      # instructions and context (similar to CLAUDE.md files in code repositories).
+      #
+      # @param section_name [String] the section name (e.g., "Games+Butterfly Galaxii")
+      # @return [Hash, nil] the +GM+AI card content if it exists, nil otherwise
+      #
+      # @example Check for AI instructions in Butterfly Galaxii
+      #   instructions = tools.get_ai_instructions("Games+Butterfly Galaxii")
+      #   if instructions
+      #     puts instructions["content"]
+      #   end
+      #
+      # @example Common patterns
+      #   tools.get_ai_instructions("Games+Butterfly Galaxii")  # Main game instructions
+      #   tools.get_ai_instructions("Games+Butterfly Galaxii+Player")  # Player section
+      #   tools.get_ai_instructions("Business Plan")  # Business plan instructions
+      def get_ai_instructions(section_name)
+        ai_card_name = "#{section_name}+GM+AI"
+
+        begin
+          response = get_card(ai_card_name)
+          card = response["card"] || response
+
+          # Return the card if it has meaningful content
+          if card && card["content"] && !card["content"].strip.empty?
+            card
+          else
+            nil
+          end
+        rescue Client::NotFoundError
+          # Card doesn't exist - that's ok
+          nil
+        rescue StandardError => e
+          # Log error but don't fail
+          warn "Error fetching AI instructions for #{section_name}: #{e.message}"
+          nil
+        end
       end
     end # class Tools
   end # module Mcp

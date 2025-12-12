@@ -17,6 +17,7 @@ require_relative "../lib/magi/archive/mcp/server/tools/search_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/create_card"
 require_relative "../lib/magi/archive/mcp/server/tools/update_card"
 require_relative "../lib/magi/archive/mcp/server/tools/delete_card"
+require_relative "../lib/magi/archive/mcp/server/tools/rename_card"
 require_relative "../lib/magi/archive/mcp/server/tools/list_children"
 
 # Tag operations
@@ -27,9 +28,6 @@ require_relative "../lib/magi/archive/mcp/server/tools/suggest_tags"
 # Relationships
 require_relative "../lib/magi/archive/mcp/server/tools/get_relationships"
 
-# Validation and recommendations
-require_relative "../lib/magi/archive/mcp/server/tools/validate_card"
-require_relative "../lib/magi/archive/mcp/server/tools/get_recommendations"
 
 # Types and rendering
 require_relative "../lib/magi/archive/mcp/server/tools/get_types"
@@ -86,6 +84,7 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::CreateCard,
     Magi::Archive::Mcp::Server::Tools::UpdateCard,
     Magi::Archive::Mcp::Server::Tools::DeleteCard,
+    Magi::Archive::Mcp::Server::Tools::RenameCard,
     Magi::Archive::Mcp::Server::Tools::ListChildren,
 
     # Tag operations
@@ -96,9 +95,6 @@ server = ::MCP::Server.new(
     # Relationships
     Magi::Archive::Mcp::Server::Tools::GetRelationships,
 
-    # Validation and recommendations
-    Magi::Archive::Mcp::Server::Tools::ValidateCard,
-    Magi::Archive::Mcp::Server::Tools::GetRecommendations,
 
     # Types and rendering
     Magi::Archive::Mcp::Server::Tools::GetTypes,
