@@ -31,16 +31,21 @@ module Magi
                   default: 50,
                   minimum: 1,
                   maximum: 100
+                },
+                include_virtual: {
+                  type: "boolean",
+                  description: "Include virtual cards (empty junction cards with no content) in results. Default: false (filters them out).",
+                  default: false
                 }
               },
               required: ["parent_name"]
             )
 
             class << self
-              def call(parent_name:, limit: 50, server_context:)
+              def call(parent_name:, limit: 50, include_virtual: false, server_context:)
                 tools = server_context[:magi_tools]
 
-                children = tools.list_children(parent_name, limit: limit)
+                children = tools.list_children(parent_name, limit: limit, include_virtual: include_virtual)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",

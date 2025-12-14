@@ -79,13 +79,14 @@ module Magi
         # @example Paginated search
         #   page1 = tools.search_cards(q: "plan", limit: 10, offset: 0)
         #   page2 = tools.search_cards(q: "plan", limit: 10, offset: 10)
-        def search_cards(q: nil, type: nil, search_in: nil, updated_since: nil, updated_before: nil, limit: 50, offset: 0)
+        def search_cards(q: nil, type: nil, search_in: nil, updated_since: nil, updated_before: nil, limit: 50, offset: 0, include_virtual: false)
           params = { limit: limit, offset: offset }
           params[:q] = q if q
           params[:type] = type if type
           params[:search_in] = search_in if search_in
           params[:updated_since] = updated_since if updated_since
           params[:updated_before] = updated_before if updated_before
+          params[:include_virtual] = include_virtual
 
           client.get("/cards", **params)
         end
@@ -107,8 +108,9 @@ module Magi
         #
         # @example Paginated
         #   page1 = tools.list_children("Game Master", limit: 20, offset: 0)
-        def list_children(parent_name, limit: 50, offset: 0)
+        def list_children(parent_name, limit: 50, offset: 0, include_virtual: false)
           params = { limit: limit, offset: offset }
+          params[:include_virtual] = include_virtual
 
           client.get("/cards/#{encode_card_name(parent_name)}/children", **params)
         end

@@ -47,22 +47,27 @@ module Magi
                   description: "Number of results to skip (for pagination)",
                   default: 0,
                   minimum: 0
+                },
+                include_virtual: {
+                  type: "boolean",
+                  description: "Include virtual cards (empty junction cards with no content) in results. Default: false (filters them out).",
+                  default: false
                 }
               },
               required: []
             )
 
             class << self
-              def call(query: nil, type: nil, search_in: nil, limit: 50, offset: 0, server_context:)
+              def call(query: nil, type: nil, search_in: nil, limit: 50, offset: 0, include_virtual: false, server_context:)
                 tools = server_context[:magi_tools]
 
-                params = { limit: limit, offset: offset }
+                params = { limit: limit, offset: offset, include_virtual: include_virtual }
                 params[:q] = query if query
                 params[:type] = type if type
                 params[:search_in] = search_in if search_in
 
                 # Log search parameters for debugging
-                $stderr.puts "search_cards: q=#{query.inspect}, type=#{type.inspect}, search_in=#{search_in.inspect}, limit=#{limit}, offset=#{offset}"
+                $stderr.puts "search_cards: q=#{query.inspect}, type=#{type.inspect}, search_in=#{search_in.inspect}, limit=#{limit}, offset=#{offset}, include_virtual=#{include_virtual}"
 
                 results = tools.search_cards(**params)
 
