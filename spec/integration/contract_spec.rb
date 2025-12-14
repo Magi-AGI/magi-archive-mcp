@@ -78,7 +78,7 @@ RSpec.describe "Magi::Archive::Mcp Contract Tests", type: :integration do
       # Recorded response from live server (Phase 2)
       stub_request(:get, "#{base_url}/cards/Business%20Plan/children")
         .with(
-          query: { limit: 50, offset: 0 },
+          query: { limit: 50, offset: 0, include_virtual: false },
           headers: { "Authorization" => "Bearer #{valid_token}" }
         )
         .to_return(
