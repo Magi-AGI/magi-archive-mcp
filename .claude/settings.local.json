@@ -25,7 +25,9 @@
       "Bash(scp:*)",
       "mcp__magi-archive__get_card",
       "Bash(E:Ruby34-x64binruby.exe binmcp-server)",
-      "Bash(ruby bin/mcp-server:*)"
+      "Bash(ruby bin/mcp-server:*)",
+      "Bash(npm run deploy:*)",
+      "WebFetch(domain:magi-archive-mcp-proxy.lake-watkins.workers.dev)"
     ],
     "deny": [],
     "ask": []
