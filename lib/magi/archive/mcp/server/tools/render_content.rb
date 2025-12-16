@@ -44,7 +44,7 @@ module Magi
                 from_sym = from_format.to_sym
                 to_sym = to_format.to_sym
 
-                result = tools.render_snippet(content, from: from_sym, to: to_sym)
+                result = tools.convert_content(content, from: from_sym, to: to_sym)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
