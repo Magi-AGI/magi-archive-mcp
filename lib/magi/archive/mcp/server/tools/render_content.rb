@@ -60,6 +60,9 @@ module Magi
               private
 
               def format_result(original, from_fmt, to_fmt, result)
+                # Extract the converted content from the API response hash
+                converted = extract_converted_content(result)
+
                 parts = []
                 parts << "# Content Conversion"
                 parts << ""
@@ -75,10 +78,36 @@ module Magi
                 parts << "## Converted Content"
                 parts << ""
                 parts << "```#{to_fmt}"
-                parts << result
+                parts << converted.to_s.strip
                 parts << "```"
 
                 parts.join("\n")
+              end
+
+              def extract_converted_content(result)
+                # Handle non-hash results
+                return result.to_s unless result.respond_to?(:keys)
+
+                # Try all possible key variations
+                %w[markdown html].each do |key|
+                  # String key
+                  val = result[key]
+                  return val if val
+
+                  # Symbol key
+                  val = result[key.to_sym]
+                  return val if val
+                end
+
+                # Fallback: get first non-format value
+                result.each do |k, v|
+                  next if k.to_s == "format"
+
+                  return v
+                end
+
+                # Ultimate fallback
+                result.to_s
               end
             end
           end
