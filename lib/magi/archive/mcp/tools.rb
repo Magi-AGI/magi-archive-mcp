@@ -690,8 +690,7 @@ module Magi
         #   result = tools.get_referers("Main Page")
         #   result.each { |card| puts card["name"] }
         def get_referers(card_name)
-          response = client.get("/cards/#{encode_card_name(card_name)}/referers")
-          response["referers"] || []
+          client.get("/cards/#{encode_card_name(card_name)}/referers")
         end
 
         # Get cards that nest/include this card
@@ -706,8 +705,7 @@ module Magi
         #   result = tools.get_nested_in("Template Card")
         #   result.each { |card| puts card["name"] }
         def get_nested_in(card_name)
-          response = client.get("/cards/#{encode_card_name(card_name)}/nested_in")
-          response["nested_in"] || []
+          client.get("/cards/#{encode_card_name(card_name)}/nested_in")
         end
 
         # Get cards that this card nests/includes
@@ -722,8 +720,7 @@ module Magi
         #   result = tools.get_nests("Main Page")
         #   result.each { |card| puts card["name"] }
         def get_nests(card_name)
-          response = client.get("/cards/#{encode_card_name(card_name)}/nests")
-          response["nests"] || []
+          client.get("/cards/#{encode_card_name(card_name)}/nests")
         end
 
         # Get cards that this card links to
@@ -738,8 +735,7 @@ module Magi
         #   result = tools.get_links("Main Page")
         #   result.each { |card| puts card["name"] }
         def get_links(card_name)
-          response = client.get("/cards/#{encode_card_name(card_name)}/links")
-          response["links"] || []
+          client.get("/cards/#{encode_card_name(card_name)}/links")
         end
 
         # Get cards that link to this card
@@ -754,8 +750,7 @@ module Magi
         #   result = tools.get_linked_by("Main Page")
         #   result.each { |card| puts card["name"] }
         def get_linked_by(card_name)
-          response = client.get("/cards/#{encode_card_name(card_name)}/linked_by")
-          response["linked_by"] || []
+          client.get("/cards/#{encode_card_name(card_name)}/linked_by")
         end
 
         # === Admin Operations ===
