@@ -31,9 +31,11 @@ RSpec.describe "Tag Operations Integration", :integration do
         expect(result.length).to be >= 0
 
         # Verify tag structure if any tags exist
+        # get_all_tags returns card hashes (from search_cards type: "Tag")
         if result.any?
           first_tag = result.first
-          expect(first_tag).to be_a(String)
+          expect(first_tag).to be_a(Hash)
+          expect(first_tag).to have_key("name")
         end
       end
 
@@ -42,6 +44,19 @@ RSpec.describe "Tag Operations Integration", :integration do
 
         expect(result).to be_an(Array)
         expect(result.length).to be <= 5
+      end
+
+      it "returns consistent format (array of card hashes)" do
+        result = tools.get_all_tags(limit: 10)
+
+        expect(result).to be_an(Array)
+        # Even empty results should maintain format
+        result.each do |tag|
+          expect(tag).to be_a(Hash),
+            "Expected tag to be Hash, got #{tag.class}: #{tag.inspect}"
+          expect(tag).to have_key("name"),
+            "Tag missing 'name' key: #{tag.keys.inspect}"
+        end
       end
     end
 
@@ -74,12 +89,44 @@ RSpec.describe "Tag Operations Integration", :integration do
         expect(result).to be_an(Array)
       end
 
-      it "returns empty array for card without tags" do
+      it "returns empty array for non-existent card" do
         # Non-existent cards return empty array (no tags card exists)
         result = tools.get_card_tags("NonExistentCard#{Time.now.to_i}")
 
         expect(result).to be_an(Array)
         expect(result).to be_empty
+      end
+
+      it "returns strings (not hashes) for card-specific tags" do
+        # get_card_tags parses [[tag]] syntax and returns plain strings
+        # This is different from get_all_tags which returns card hashes
+        tools.create_card(
+          test_card_name,
+          content: "Content with [[TestTag1]] and [[TestTag2]]",
+          type: "RichText"
+        )
+
+        # Create the tags card manually if needed
+        begin
+          tools.create_card(
+            "#{test_card_name}+tags",
+            content: "[[TestTag1]]\n[[TestTag2]]",
+            type: "Pointer"
+          )
+        rescue StandardError
+          # May already exist or not be needed
+        end
+
+        result = tools.get_card_tags(test_card_name)
+
+        expect(result).to be_an(Array)
+        result.each do |tag|
+          expect(tag).to be_a(String),
+            "Expected tag to be String, got #{tag.class}: #{tag.inspect}"
+        end
+
+        # Cleanup
+        tools.delete_card("#{test_card_name}+tags") rescue nil
       end
     end
 
