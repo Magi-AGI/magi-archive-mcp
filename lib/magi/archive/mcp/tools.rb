@@ -1648,6 +1648,53 @@ module Magi
           nil
         end
       end
+
+      # === Auto-Link Operations ===
+
+      # Analyze card content and suggest or apply wiki links
+      #
+      # Scans a card's content for terms that match existing card names within
+      # the same scope (top 2 left parts of the card name). Suggests or applies
+      # wiki links [[CardName]] for discovered terms.
+      #
+      # This tool is useful for:
+      # - Cross-referencing content after writing
+      # - Building wiki interconnectedness
+      # - Finding related cards that should be linked
+      #
+      # @param card_name [String] the card to analyze
+      # @param mode [String] "suggest" (default) to preview links, "apply" to update card
+      # @param dry_run [Boolean] preview changes without saving (default: true)
+      # @param scope [String, nil] scope for term matching (default: derived from card name)
+      # @param min_term_length [Integer] minimum term length to consider (default: 3)
+      # @param include_types [Array<String>, nil] only link to cards of these types
+      # @return [Hash] suggestions, preview, and stats
+      #
+      # @example Suggest links for a card
+      #   result = tools.auto_link("Games+Butterfly Galaxii+Player+Species+Araithi")
+      #   result["suggestions"].each do |s|
+      #     puts "Found '#{s['term']}' -> #{s['matching_card']}"
+      #   end
+      #
+      # @example Preview changes (dry run)
+      #   result = tools.auto_link("MyCard", mode: "apply", dry_run: true)
+      #   puts result["preview"]  # See what the content would look like
+      #
+      # @example Apply links to card
+      #   result = tools.auto_link("MyCard", mode: "apply", dry_run: false)
+      #   puts "Applied #{result['applied']} links"
+      def auto_link(card_name, mode: "suggest", dry_run: true, scope: nil, min_term_length: 3, include_types: nil)
+        payload = {
+          card_name: card_name,
+          mode: mode,
+          dry_run: dry_run
+        }
+        payload[:scope] = scope if scope
+        payload[:min_term_length] = min_term_length
+        payload[:include_types] = include_types if include_types
+
+        client.post("/auto_link", **payload)
+      end
     end # class Tools
   end # module Mcp
   end # module Archive

@@ -51,6 +51,9 @@ require_relative "../lib/magi/archive/mcp/server/tools/batch_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/run_query"
 require_relative "../lib/magi/archive/mcp/server/tools/spoiler_scan"
 
+# Auto-linking
+require_relative "../lib/magi/archive/mcp/server/tools/auto_link"
+
 # Initialize the Magi Archive tools
 # This creates an authenticated client using environment variables:
 # - MCP_USERNAME + MCP_PASSWORD (recommended)
@@ -116,7 +119,10 @@ server = ::MCP::Server.new(
     # Phase 3: Advanced operations
     Magi::Archive::Mcp::Server::Tools::BatchCards,
     Magi::Archive::Mcp::Server::Tools::RunQuery,
-    Magi::Archive::Mcp::Server::Tools::SpoilerScan
+    Magi::Archive::Mcp::Server::Tools::SpoilerScan,
+
+    # Auto-linking
+    Magi::Archive::Mcp::Server::Tools::AutoLink
   ],
   server_context: server_context
 )
