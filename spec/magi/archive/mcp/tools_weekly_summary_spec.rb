@@ -327,12 +327,16 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
         )
     end
 
-    it "returns markdown content when create_card is false" do
+    it "returns preview hash with metadata when create_card is false" do
       result = tools.create_weekly_summary(create_card: false)
 
-      expect(result).to be_a(String)
-      expect(result).to include("# Weekly Work Summary")
-      expect(result).to include("## Executive Summary")
+      expect(result).to be_a(Hash)
+      expect(result["preview"]).to eq(true)
+      expect(result["card_name"]).to match(/Weekly Work Summaries\+Weekly Work Summary/)
+      expect(result["card_type"]).to eq("Markdown")
+      expect(result["content"]).to include("# Weekly Work Summary")
+      expect(result["content"]).to include("## Executive Summary")
+      expect(result["toc_card"]).to eq("Weekly Work Summaries+table-of-contents")
     end
 
     it "creates a weekly summary card" do
@@ -344,21 +348,21 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
       stub_request(:patch, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
         .to_return(status: 404, body: { error: "not_found" }.to_json)
 
-      # Stub the card creation
+      # Stub the card creation - now uses "Weekly Work Summary" prefix and Markdown type
       stub_request(:post, "#{base_url}/cards")
         .with(
           headers: { "Authorization" => "Bearer #{valid_token}" },
           body: hash_including(
-            "name" => /Weekly Work Summaries\+\d{4} \d{2} \d{2} - TestUser/,
-            "type" => "RichText"
+            "name" => /Weekly Work Summaries\+Weekly Work Summary \d{4} \d{2} \d{2} - TestUser/,
+            "type" => "Markdown"
           )
         )
         .to_return(
           status: 201,
           body: {
-            name: "Weekly Work Summaries+2025 12 03 - TestUser",
+            name: "Weekly Work Summaries+Weekly Work Summary 2025 12 03 - TestUser",
             id: 999,
-            type: "RichText",
+            type: "Markdown",
             content: "Summary content"
           }.to_json
         )
@@ -381,10 +385,10 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
           }.to_json
         )
 
-      result = tools.create_weekly_summary
+      result = tools.create_weekly_summary(create_card: true)
 
       expect(result).to be_a(Hash)
-      expect(result["name"]).to match(/Weekly Work Summaries\+/)
+      expect(result["name"]).to match(/Weekly Work Summaries\+Weekly Work Summary/)
     end
 
     it "supports custom date" do
@@ -398,12 +402,12 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
       stub_request(:post, "#{base_url}/cards")
         .to_return(
           status: 201,
-          body: { name: "Weekly Work Summaries+2025 12 09 - TestUser", id: 999, type: "RichText" }.to_json
+          body: { name: "Weekly Work Summaries+Weekly Work Summary 2025 12 09 - TestUser", id: 999, type: "Markdown" }.to_json
         )
 
-      result = tools.create_weekly_summary(date: "2025 12 09")
+      result = tools.create_weekly_summary(date: "2025 12 09", create_card: true)
 
-      expect(result["name"]).to eq("Weekly Work Summaries+2025 12 09 - TestUser")
+      expect(result["name"]).to eq("Weekly Work Summaries+Weekly Work Summary 2025 12 09 - TestUser")
     end
 
     it "supports custom executive summary" do
@@ -418,9 +422,9 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
 
       # Stub any POST request (both main card and TOC)
       stub_request(:post, "#{base_url}/cards")
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Markdown" }.to_json)
 
-      tools.create_weekly_summary(executive_summary: custom_summary)
+      tools.create_weekly_summary(executive_summary: custom_summary, create_card: true)
 
       # Verify the main card was created with the custom summary
       expect(WebMock).to have_requested(:post, "#{base_url}/cards")
@@ -438,9 +442,9 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
         .to_return(status: 404, body: { error: "not_found" }.to_json)
 
       stub_request(:post, "#{base_url}/cards")
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Markdown" }.to_json)
 
-      tools.create_weekly_summary(base_path: "/custom/path")
+      tools.create_weekly_summary(base_path: "/custom/path", create_card: true)
     end
 
     it "supports custom lookback period" do
@@ -454,9 +458,9 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
         .to_return(status: 404, body: { error: "not_found" }.to_json)
 
       stub_request(:post, "#{base_url}/cards")
-        .to_return(status: 201, body: { name: "Summary", id: 999, type: "RichText" }.to_json)
+        .to_return(status: 201, body: { name: "Summary", id: 999, type: "Markdown" }.to_json)
 
-      tools.create_weekly_summary(days: 14)
+      tools.create_weekly_summary(days: 14, create_card: true)
     end
   end
 

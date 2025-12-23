@@ -75,10 +75,10 @@ module Magi
                     text: format_created_card(result)
                   }])
                 else
-                  # Result is the markdown preview
+                  # Result is a preview hash with metadata and instructions
                   ::MCP::Tool::Response.new([{
                     type: "text",
-                    text: "# Weekly Summary Preview\n\n#{result}"
+                    text: format_preview(result)
                   }])
                 end
               rescue StandardError => e
@@ -89,6 +89,37 @@ module Magi
               end
 
               private
+
+              def format_preview(preview)
+                parts = []
+                parts << "# Weekly Summary Preview"
+                parts << ""
+                parts << "## Card Creation Instructions"
+                parts << ""
+                parts << "To create this weekly summary on the wiki, use the `create_card` tool with:"
+                parts << ""
+                parts << "- **Card Name:** `#{preview['card_name']}`"
+                parts << "- **Card Type:** `#{preview['card_type']}`"
+                parts << "- **Content:** The markdown content below"
+                parts << ""
+                parts << "## TOC Update Instructions"
+                parts << ""
+                parts << "After creating the card, update the table of contents card:"
+                parts << ""
+                parts << "1. Fetch: `#{preview['toc_card']}`"
+                parts << "2. Add this entry at the top of the `<ol>` list:"
+                parts << "   ```html"
+                parts << "   <li>[[#{preview['card_name']}|Weekly Work Summary #{preview['date']} - #{preview['username']}]]</li>"
+                parts << "   ```"
+                parts << ""
+                parts << "---"
+                parts << ""
+                parts << "## Content Preview"
+                parts << ""
+                parts << preview["content"]
+
+                parts.join("\n")
+              end
 
               def format_created_card(card)
                 parts = []

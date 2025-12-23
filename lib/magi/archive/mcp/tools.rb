@@ -99,18 +99,27 @@ module Magi
         # @param parent_name [String] the parent card name
         # @param limit [Integer] results per page (default: 50, max: 100)
         # @param offset [Integer] starting offset (default: 0)
-        # @return [Hash] with keys: parent, children (array), depth, child_count
+        # @param depth [Integer] how many levels deep to fetch (default: 3)
+        #   - depth=1: only direct children
+        #   - depth=2: children and grandchildren
+        #   - depth=3: children, grandchildren, and great-grandchildren
+        # @return [Hash] with keys: parent, children (array with nested children), depth, child_count
         # @raise [Client::NotFoundError] if parent card doesn't exist
         #
         # @example
         #   result = tools.list_children("Business Plan")
         #   result["children"].each { |child| puts child["name"] }
         #
+        # @example With depth
+        #   result = tools.list_children("Games", depth: 2)
+        #   # Returns children and grandchildren
+        #
         # @example Paginated
         #   page1 = tools.list_children("Game Master", limit: 20, offset: 0)
-        def list_children(parent_name, limit: 50, offset: 0, include_virtual: false)
+        def list_children(parent_name, limit: 50, offset: 0, include_virtual: false, depth: 3)
           params = { limit: limit, offset: offset }
           params[:include_virtual] = include_virtual
+          params[:depth] = depth if depth && depth > 1
 
           client.get("/cards/#{encode_card_name(parent_name)}/children", **params)
         end
@@ -1243,8 +1252,9 @@ module Magi
         date_str = date || Time.now.strftime("%Y %m %d")
 
         # Make this a child of the parent card using "+" notation
-        # e.g., "Weekly Work Summaries+2025 12 08 - Nemquae"
-        card_name = "#{parent}+#{date_str} - #{username}"
+        # Format: "Weekly Work Summaries+Weekly Work Summary YYYY MM DD - Username"
+        # This matches the existing pattern used for previous summaries
+        card_name = "#{parent}+Weekly Work Summary #{date_str} - #{username}"
 
         # Fetch recent changes
         card_changes = get_recent_changes(days: days)
@@ -1258,14 +1268,26 @@ module Magi
           executive_summary: executive_summary
         )
 
-        # Return content only if requested
-        return content unless create_card
+        # Return preview with metadata if not creating card
+        unless create_card
+          return {
+            "preview" => true,
+            "card_name" => card_name,
+            "card_type" => "Markdown",
+            "parent" => parent,
+            "date" => date_str,
+            "username" => username,
+            "content" => content,
+            "toc_card" => "#{parent}+table-of-contents"
+          }
+        end
 
         # Create the card as a child of the parent
+        # Use Markdown type to match existing weekly summaries
         card = self.create_card(
           card_name,
           content: content,
-          type: "RichText"
+          type: "Markdown"
         )
 
         # Add to table of contents
@@ -1416,7 +1438,7 @@ module Magi
       # Adds a link to a newly created weekly summary to the TOC card.
       # Creates the TOC card if it doesn't exist.
       #
-      # @param card_name [String] the full card name (e.g., "Weekly Work Summaries+2025 12 08 - Nemquae")
+      # @param card_name [String] the full card name (e.g., "Weekly Work Summaries+Weekly Work Summary 2025 12 08 - Nemquae")
       # @param date_str [String] the date string (e.g., "2025 12 08")
       # @param username [String] the username (e.g., "Nemquae")
       def update_weekly_summaries_toc(card_name, date_str, username)
@@ -1427,26 +1449,30 @@ module Magi
           toc = get_card(toc_card_name)
           content = toc["content"] || ""
         rescue Client::NotFoundError
-          # TOC doesn't exist, create it with header
-          content = "# Weekly Work Summaries - Table of Contents\n\n"
-          content += "This page lists all weekly work summaries.\n\n"
+          # TOC doesn't exist, create it with HTML ordered list structure
+          content = "<ol>\n</ol>"
         end
 
-        # Add the new entry at the top (most recent first)
-        # Format: [[_L+Weekly Work Summary DATE - USER|Weekly Work Summary DATE - USER]]
-        # Extract just the date and username part after the parent card name
-        display_name = card_name.sub(/^Weekly Work Summaries\+/, "Weekly Work Summary ")
-        new_entry = "- [[_L+#{display_name}|#{display_name}]]\n"
+        # Create display name for the link
+        # Format: "Weekly Work Summary YYYY MM DD - Username"
+        display_name = "Weekly Work Summary #{date_str} - #{username}"
+
+        # Create the new TOC entry in HTML format
+        # Format: <li>[[CardName|DisplayName]]</li>
+        new_entry = "<li>[[#{card_name}|#{display_name}]]</li>"
 
         # Check if this entry already exists
         return if content.include?(new_entry)
 
-        # Insert after the header/description
-        lines = content.lines
-        insert_index = lines.index { |line| line.start_with?("- [[") } || lines.size
-
-        lines.insert(insert_index, new_entry)
-        updated_content = lines.join
+        # Insert at the top of the list (most recent first)
+        # Find the opening <ol> tag and insert after it
+        if content.include?("<ol>")
+          # Insert new entry right after <ol> tag
+          updated_content = content.sub(/<ol>\s*/i, "<ol>\n#{new_entry}\n")
+        else
+          # No <ol> tag found, wrap content in a new ordered list
+          updated_content = "<ol>\n#{new_entry}\n#{content}</ol>"
+        end
 
         # Update or create the TOC card
         begin

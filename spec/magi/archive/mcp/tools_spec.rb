@@ -240,7 +240,7 @@ RSpec.describe Magi::Archive::Mcp::Tools do
     before do
       stub_request(:get, children_url)
         .with(
-          query: { "limit" => "50", "offset" => "0" },
+          query: { "limit" => "50", "offset" => "0", "depth" => "3", "include_virtual" => "false" },
           headers: { "Authorization" => "Bearer #{valid_token}" }
         )
         .to_return(
@@ -250,23 +250,45 @@ RSpec.describe Magi::Archive::Mcp::Tools do
         )
     end
 
-    it "lists children of parent card" do
+    it "lists children of parent card with default depth of 3" do
       result = tools.list_children(parent_name)
 
       expect(result).to eq(children_response)
       expect(WebMock).to have_requested(:get, children_url)
-        .with(query: { "limit" => "50", "offset" => "0" })
+        .with(query: { "limit" => "50", "offset" => "0", "depth" => "3", "include_virtual" => "false" })
     end
 
     it "uses custom limit and offset" do
       stub_request(:get, children_url)
-        .with(query: { "limit" => "20", "offset" => "10" })
+        .with(query: { "limit" => "20", "offset" => "10", "depth" => "3", "include_virtual" => "false" })
         .to_return(status: 200, body: children_response.to_json)
 
       tools.list_children(parent_name, limit: 20, offset: 10)
 
       expect(WebMock).to have_requested(:get, children_url)
-        .with(query: { "limit" => "20", "offset" => "10" })
+        .with(query: { "limit" => "20", "offset" => "10", "depth" => "3", "include_virtual" => "false" })
+    end
+
+    it "supports custom depth parameter" do
+      stub_request(:get, children_url)
+        .with(query: { "limit" => "50", "offset" => "0", "depth" => "5", "include_virtual" => "false" })
+        .to_return(status: 200, body: children_response.to_json)
+
+      tools.list_children(parent_name, depth: 5)
+
+      expect(WebMock).to have_requested(:get, children_url)
+        .with(query: { "limit" => "50", "offset" => "0", "depth" => "5", "include_virtual" => "false" })
+    end
+
+    it "omits depth parameter when depth is 1" do
+      stub_request(:get, children_url)
+        .with(query: { "limit" => "50", "offset" => "0", "include_virtual" => "false" })
+        .to_return(status: 200, body: children_response.to_json)
+
+      tools.list_children(parent_name, depth: 1)
+
+      expect(WebMock).to have_requested(:get, children_url)
+        .with(query: { "limit" => "50", "offset" => "0", "include_virtual" => "false" })
     end
 
     context "when parent card not found" do
@@ -274,7 +296,7 @@ RSpec.describe Magi::Archive::Mcp::Tools do
 
       before do
         stub_request(:get, nonexistent_url)
-          .with(query: { "limit" => "50", "offset" => "0" })
+          .with(query: { "limit" => "50", "offset" => "0", "depth" => "3", "include_virtual" => "false" })
           .to_return(
             status: 404,
             body: { "error" => "not_found", "message" => "Parent card not found" }.to_json

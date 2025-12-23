@@ -32,6 +32,13 @@ module Magi
                   minimum: 1,
                   maximum: 100
                 },
+                depth: {
+                  type: "integer",
+                  description: "How many levels deep to fetch (default: 3). depth=1 returns only direct children, depth=2 includes grandchildren, depth=3 includes great-grandchildren.",
+                  default: 3,
+                  minimum: 1,
+                  maximum: 5
+                },
                 include_virtual: {
                   type: "boolean",
                   description: "Include virtual cards (empty junction cards with no content) in results. Default: false (filters them out).",
@@ -42,10 +49,10 @@ module Magi
             )
 
             class << self
-              def call(parent_name:, limit: 50, include_virtual: false, server_context:)
+              def call(parent_name:, limit: 50, depth: 3, include_virtual: false, server_context:)
                 tools = server_context[:magi_tools]
 
-                children = tools.list_children(parent_name, limit: limit, include_virtual: include_virtual)
+                children = tools.list_children(parent_name, limit: limit, include_virtual: include_virtual, depth: depth)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
