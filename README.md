@@ -79,6 +79,17 @@ gem install magi-archive-mcp
 
 ### From Source
 
+**Requires Ruby 3.2+** (check with `ruby --version`)
+
+If you have an older Ruby, install a modern version using [rbenv](https://github.com/rbenv/rbenv) or [asdf](https://asdf-vm.com/):
+```bash
+# Using rbenv
+brew install rbenv ruby-build
+rbenv install 3.2.2
+rbenv global 3.2.2
+```
+
+Then install:
 ```bash
 git clone https://github.com/Magi-AGI/magi-archive-mcp.git
 cd magi-archive-mcp
