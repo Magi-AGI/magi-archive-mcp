@@ -66,18 +66,47 @@ module Magi
 
               private
 
+              # Detect if a card is a virtual/junction card
+              # Virtual cards are empty compound cards that serve as hierarchy parents
+              def virtual_card?(card)
+                # If API explicitly tells us, use that
+                return card['virtual_card'] if card.key?('virtual_card')
+
+                # Otherwise detect: compound name + empty content
+                name = card['name'] || ''
+                content = card['content'] || ''
+
+                # Must be a compound card (contains +)
+                return false unless name.include?('+')
+
+                # Content must be empty or whitespace only
+                content.strip.empty?
+              end
+
               def format_card(card)
                 parts = []
                 parts << "# #{card['name']}"
                 parts << ""
+
+                # Determine and display virtual card status prominently
+                is_virtual = virtual_card?(card)
+
                 parts << "**Type:** #{card['type']}"
                 parts << "**ID:** #{card['id']}" if card['id']
                 parts << "**Updated:** #{card['updated_at']}" if card['updated_at']
                 parts << "**URL:** #{card['url']}" if card['url']
+
+                # Add virtual card indicator
+                if is_virtual
+                  parts << "**Virtual Card:** ⚠️ YES - This is a structural hierarchy card, DO NOT DELETE"
+                else
+                  parts << "**Virtual Card:** No"
+                end
+
                 parts << ""
                 parts << "## Content"
                 parts << ""
-                parts << (card['content'] || '(empty)')
+                parts << (card['content'].to_s.strip.empty? ? '(empty)' : card['content'])
 
                 # Add special note for Pointer and Search cards
                 if card['type'] == 'Pointer'
@@ -88,14 +117,19 @@ module Magi
                   parts << "**Note:** This is a Search card. Content shows the search query. Results are dynamically generated when viewed on wiki."
                 end
 
-                # Add warning for virtual cards (empty junction cards)
-                # Virtual cards are naming anchors - actual content is in compound child cards
-                if card['virtual_card'] == true
+                # Add detailed warning for virtual cards
+                if is_virtual
                   parts << ""
-                  parts << "**Warning:** This is a virtual/junction card with no content."
-                  parts << "The actual content is likely in a compound child card with a full hierarchical path."
-                  parts << "Search for cards containing '#{card['name']}' in their name to find the real content."
-                  parts << "Example: If this is 'Trallox', look for 'Games+Butterfly Galaxii+...+Trallox'"
+                  parts << "---"
+                  parts << "## ⚠️ Virtual Card Warning"
+                  parts << ""
+                  parts << "This is a **virtual/junction card** - an empty compound card that exists"
+                  parts << "as a structural parent in the wiki hierarchy. It has no content because"
+                  parts << "actual content lives in child cards beneath it."
+                  parts << ""
+                  parts << "**DO NOT DELETE** - Deleting virtual cards breaks the wiki structure."
+                  parts << ""
+                  parts << "Use `list_children` to see child cards under this parent."
                 end
 
                 if card['children']&.any?

@@ -524,6 +524,42 @@ input_schema(
 
 **Priority**: High - Prevents data loss from AI agent mistakes
 
+### Virtual Card Detection (Phase 4)
+**Status**: 🔄 **PARTIAL** (client-side detection implemented, API enhancement pending)
+
+**Problem**: AI agents sometimes delete virtual/junction cards (empty compound cards like `Games+Butterfly Galaxii`) mistaking them for orphaned content. These cards are essential structural elements in the wiki hierarchy.
+
+**Current Solution** (Client-side, implemented Dec 2025):
+- MCP `get_card` tool detects virtual cards by checking:
+  1. Card name contains `+` (compound/junction card)
+  2. Card content is empty or whitespace only
+- Displays prominent `**Virtual Card:** ⚠️ YES` warning in response
+- Adds detailed explanation advising not to delete
+
+**Proposed Enhancement** (Server-side):
+- Add `virtual_card: true|false` field to card responses from Decko API
+- Decko can detect more accurately using:
+  ```ruby
+  card.virtual? || (card.compound? && card.content.blank? && card.children.any?)
+  ```
+- More reliable than client-side heuristics
+
+**API Changes**:
+```json
+// GET /api/mcp/cards/:name response
+{
+  "name": "Games+Butterfly Galaxii",
+  "type": "Basic",
+  "content": "",
+  "virtual_card": true,  // NEW FIELD
+  "child_count": 15      // Optional: helps determine if card is structural
+}
+```
+
+**Dependencies**: Decko API update
+
+**Estimated Effort**: 1 day (server-side addition)
+
 ## Security & Auditing
 - HTTPS only; lock API to known IPs/SGs if possible.
 - Log role, card name, verb, and outcome; redact content in logs by default (toggleable for admin debug).
