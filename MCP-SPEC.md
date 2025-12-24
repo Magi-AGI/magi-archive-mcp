@@ -220,7 +220,7 @@
 ## Open Questions
 - Attachment handling: defer to Phase 2/3 or add upload endpoint?
 - Bulk delete: add admin-only batch delete?
-- Card revision history: expose Decko versions via API?
+- ~~Card revision history: expose Decko versions via API?~~ → **Planned for Phase 4** (see Future Enhancements)
 - Recursive children listing: keep flat for MVP; add recursive option later if needed.
 
 ## Future Enhancements (Phase 3+)
@@ -356,6 +356,173 @@ suggest_tags(card_name: "Games+Butterfly Galaxii+Tech")
 # Suggest tags for new content
 suggest_tags(content: "<p>Advanced neural interface technology...</p>", type: "Technology")
 ```
+
+### Card History & Restore (Phase 4)
+**Status**: 📋 **PLANNED**
+
+**Problem**: Deleted cards or overwritten content cannot be recovered via the API. AI agents occasionally delete virtual/junction cards by mistake, and there's no programmatic way to undo these actions. Currently, recovery requires manual intervention via the wiki's History tab.
+
+**Background**: Decko maintains full revision history internally:
+- `Card#acts` - All changes (create, update, delete) to a card
+- `Card#actions` - Individual field-level changes within each act
+- Cards are never truly deleted; they're moved to "trash" and can be restored
+- Each revision stores the complete content state
+
+**Proposed Solution**:
+
+#### Server-side (Decko API)
+
+**New Endpoints**:
+
+1. `GET /api/mcp/cards/:name/history` - List card revisions
+   ```json
+   {
+     "card": "Games+Butterfly Galaxii",
+     "revisions": [
+       {
+         "act_id": 12345,
+         "action": "update",
+         "actor": "Nemquae",
+         "acted_at": "2025-12-24T10:30:00Z",
+         "changes": ["content"],
+         "comment": null
+       },
+       {
+         "act_id": 12340,
+         "action": "create",
+         "actor": "Nemquae",
+         "acted_at": "2025-12-20T15:00:00Z",
+         "changes": ["name", "type", "content"],
+         "comment": "Initial creation"
+       }
+     ],
+     "total": 2,
+     "in_trash": false
+   }
+   ```
+
+2. `GET /api/mcp/cards/:name/history/:act_id` - Get specific revision content
+   ```json
+   {
+     "card": "Games+Butterfly Galaxii",
+     "act_id": 12340,
+     "acted_at": "2025-12-20T15:00:00Z",
+     "actor": "Nemquae",
+     "snapshot": {
+       "name": "Games+Butterfly Galaxii",
+       "type": "RichText",
+       "content": "<p>Original content...</p>"
+     }
+   }
+   ```
+
+3. `POST /api/mcp/cards/:name/restore` - Restore card to a previous state
+   - **Role**: `admin` only
+   - **Body**: `{ "act_id": 12340 }` or `{ "from_trash": true }`
+   ```json
+   {
+     "success": true,
+     "card": "Games+Butterfly Galaxii",
+     "restored_from": {
+       "act_id": 12340,
+       "acted_at": "2025-12-20T15:00:00Z"
+     },
+     "message": "Card restored to revision from 2025-12-20"
+   }
+   ```
+
+4. `GET /api/mcp/trash` - List deleted cards (admin only)
+   ```json
+   {
+     "cards": [
+       {
+         "name": "Test Card",
+         "type": "Basic",
+         "deleted_at": "2025-12-24T09:00:00Z",
+         "deleted_by": "mcp-admin"
+       }
+     ],
+     "total": 1
+   }
+   ```
+
+#### Client-side (MCP Server)
+
+**New Tools**:
+
+1. `get_card_history` - View revision history for a card
+   ```ruby
+   tools.get_card_history("Games+Butterfly Galaxii")
+   tools.get_card_history("Games+Butterfly Galaxii", limit: 10)
+   ```
+
+2. `get_revision` - Get content from a specific revision
+   ```ruby
+   tools.get_revision("Games+Butterfly Galaxii", act_id: 12340)
+   ```
+
+3. `restore_card` - Restore card to previous state (admin only)
+   ```ruby
+   # Restore to specific revision
+   tools.restore_card("Games+Butterfly Galaxii", act_id: 12340)
+
+   # Restore from trash (undelete)
+   tools.restore_card("Accidentally Deleted Card", from_trash: true)
+   ```
+
+4. `list_trash` - List deleted cards (admin only)
+   ```ruby
+   tools.list_trash(limit: 50)
+   ```
+
+**MCP Tool Definitions**:
+
+```ruby
+# get_card_history
+input_schema(
+  properties: {
+    name: { type: "string", description: "Card name" },
+    limit: { type: "integer", default: 20, maximum: 100 }
+  },
+  required: ["name"]
+)
+
+# restore_card
+input_schema(
+  properties: {
+    name: { type: "string", description: "Card name to restore" },
+    act_id: { type: "integer", description: "Revision ID to restore to" },
+    from_trash: { type: "boolean", description: "Restore deleted card from trash" }
+  },
+  required: ["name"]
+)
+```
+
+**Implementation Notes**:
+
+- **Decko internals**: Use `Card#acts`, `Card#actions`, and `Act#card_actions` for history
+- **Trash recovery**: Use `Card.where(trash: true)` and `card.update!(trash: false)` to restore
+- **Revision restore**: Create new act that copies content from historical action
+- **Performance**: History queries should be indexed on `card_id` and `acted_at`
+- **Security**: History is role-aware; GM-only cards' history is hidden from user role
+- **Audit**: All restore operations logged with actor, source revision, and timestamp
+
+**Use Cases**:
+
+1. **Accidental deletion recovery**: AI agent mistakenly deletes a virtual card; admin uses `restore_card(name, from_trash: true)` to recover
+2. **Content rollback**: Bad edit overwrites important content; use `get_card_history` to find good revision, then `restore_card(name, act_id: X)`
+3. **Audit trail**: Review who changed a card and when using `get_card_history`
+4. **Trash cleanup**: Admin reviews `list_trash` to permanently delete or restore old cards
+
+**Dependencies**:
+- Decko's built-in versioning system (acts/actions tables)
+- Admin role for restore operations
+
+**Estimated Effort**:
+- Server-side: 3-4 days (controllers, serializers, tests)
+- Client-side: 2 days (tools, MCP definitions, tests)
+
+**Priority**: High - Prevents data loss from AI agent mistakes
 
 ## Security & Auditing
 - HTTPS only; lock API to known IPs/SGs if possible.
