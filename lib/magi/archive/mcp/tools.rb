@@ -762,6 +762,113 @@ module Magi
           client.get("/cards/#{encode_card_name(card_name)}/linked_by")
         end
 
+        # === Card History & Restore Operations ===
+
+        # Get card revision history
+        #
+        # Returns the revision history for a card, including all past
+        # creates, updates, and deletes. Each revision includes metadata
+        # about who made the change and when.
+        #
+        # @param name [String] the card name
+        # @param limit [Integer] maximum revisions to return (default: 20, max: 100)
+        # @return [Hash] with keys: card, revisions (array), total, in_trash
+        # @raise [Client::NotFoundError] if card doesn't exist
+        # @raise [Client::AuthorizationError] if user lacks permission to view history
+        #
+        # @example Get recent history
+        #   history = tools.get_card_history("My Card")
+        #   history["revisions"].each do |rev|
+        #     puts "#{rev['acted_at']}: #{rev['action']} by #{rev['actor']}"
+        #   end
+        #
+        # @example Paginate through history
+        #   history = tools.get_card_history("My Card", limit: 50)
+        #   puts "Total revisions: #{history['total']}"
+        def get_card_history(name, limit: 20)
+          params = { limit: [limit, 100].min }
+
+          client.get("/cards/#{encode_card_name(name)}/history", **params)
+        end
+
+        # Get content from a specific revision
+        #
+        # Retrieves the full card state at a specific point in time,
+        # identified by act_id from the revision history.
+        #
+        # @param name [String] the card name
+        # @param act_id [Integer] the revision act ID
+        # @return [Hash] with keys: card, act_id, acted_at, actor, snapshot
+        # @raise [Client::NotFoundError] if card or revision doesn't exist
+        # @raise [Client::AuthorizationError] if user lacks permission
+        #
+        # @example Get specific revision content
+        #   history = tools.get_card_history("My Card")
+        #   old_act = history["revisions"].last["act_id"]
+        #   revision = tools.get_revision("My Card", act_id: old_act)
+        #   puts "Old content: #{revision['snapshot']['content']}"
+        def get_revision(name, act_id:)
+          client.get("/cards/#{encode_card_name(name)}/history/#{act_id}")
+        end
+
+        # Restore a card to a previous state
+        #
+        # Restores a card to a previous revision or undeletes a trashed card.
+        # This operation requires admin role permissions.
+        #
+        # @param name [String] the card name
+        # @param act_id [Integer, nil] revision ID to restore to (optional)
+        # @param from_trash [Boolean] restore from trash instead of revision (default: false)
+        # @return [Hash] with keys: success, card, restored_from, message
+        # @raise [Client::NotFoundError] if card or revision doesn't exist
+        # @raise [Client::AuthorizationError] if user lacks admin permission
+        # @raise [Client::ValidationError] if neither act_id nor from_trash specified
+        #
+        # @example Restore to specific revision
+        #   result = tools.restore_card("My Card", act_id: 12345)
+        #   puts result["message"]
+        #
+        # @example Restore from trash
+        #   result = tools.restore_card("Deleted Card", from_trash: true)
+        #   puts "Restored: #{result['card']}"
+        def restore_card(name, act_id: nil, from_trash: false)
+          payload = {}
+          payload[:act_id] = act_id if act_id
+          payload[:from_trash] = true if from_trash
+
+          if payload.empty?
+            raise ArgumentError, "Must specify either act_id or from_trash: true"
+          end
+
+          client.post("/cards/#{encode_card_name(name)}/restore", **payload)
+        end
+
+        # List deleted cards in trash
+        #
+        # Returns cards that have been deleted (moved to trash) but not
+        # permanently removed. This operation requires admin role permissions.
+        #
+        # @param limit [Integer] maximum cards to return (default: 50, max: 100)
+        # @param offset [Integer] starting offset for pagination (default: 0)
+        # @return [Hash] with keys: cards (array), total
+        # @raise [Client::AuthorizationError] if user lacks admin permission
+        #
+        # @example List trashed cards
+        #   trash = tools.list_trash(limit: 20)
+        #   trash["cards"].each do |card|
+        #     puts "#{card['name']} - deleted at #{card['deleted_at']} by #{card['deleted_by']}"
+        #   end
+        #
+        # @example Check if a specific card is in trash
+        #   trash = tools.list_trash(limit: 100)
+        #   found = trash["cards"].find { |c| c["name"] == "My Card" }
+        #   puts "Card is in trash!" if found
+        def list_trash(limit: 50, offset: 0)
+          params = { limit: [limit, 100].min, offset: offset }
+
+          client.get("/trash", **params)
+        end
+
         # === Admin Operations ===
 
         # Download database backup (admin only)

@@ -358,7 +358,7 @@ suggest_tags(content: "<p>Advanced neural interface technology...</p>", type: "T
 ```
 
 ### Card History & Restore (Phase 4)
-**Status**: 📋 **PLANNED**
+**Status**: 🔄 **PARTIAL** (MCP client implemented, awaiting Decko API)
 
 **Problem**: Deleted cards or overwritten content cannot be recovered via the API. AI agents occasionally delete virtual/junction cards by mistake, and there's no programmatic way to undo these actions. Currently, recovery requires manual intervention via the wiki's History tab.
 
@@ -523,6 +523,19 @@ input_schema(
 - Client-side: 2 days (tools, MCP definitions, tests)
 
 **Priority**: High - Prevents data loss from AI agent mistakes
+
+**Implementation Status** (Dec 2025):
+- **MCP Client** (magi-archive-mcp): ✅ Implemented
+  - `Tools#get_card_history(name, limit:)` - Get revision history
+  - `Tools#get_revision(name, act_id:)` - Get specific revision content
+  - `Tools#restore_card(name, act_id: nil, from_trash: false)` - Restore card
+  - `Tools#list_trash(limit:, offset:)` - List deleted cards
+  - MCP tools: `get_card_history`, `get_revision`, `restore_card`, `list_trash`
+  - Unit tests and integration tests added
+- **Decko API** (magi-archive): ⏳ Pending implementation
+  - Requires new controllers for history endpoints
+  - Must expose Card#acts and Card#actions data
+  - Trash restoration needs Card.where(trash: true) access
 
 ### Virtual Card Detection (Phase 4)
 **Status**: 🔄 **PARTIAL** (client-side detection implemented, API enhancement pending)

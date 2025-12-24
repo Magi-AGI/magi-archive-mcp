@@ -20,6 +20,7 @@ require_relative "../lib/magi/archive/mcp/server/tools/search_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/create_card"
 require_relative "../lib/magi/archive/mcp/server/tools/update_card"
 require_relative "../lib/magi/archive/mcp/server/tools/delete_card"
+require_relative "../lib/magi/archive/mcp/server/tools/rename_card"
 require_relative "../lib/magi/archive/mcp/server/tools/list_children"
 
 # Tag operations
@@ -30,16 +31,18 @@ require_relative "../lib/magi/archive/mcp/server/tools/suggest_tags"
 # Relationships
 require_relative "../lib/magi/archive/mcp/server/tools/get_relationships"
 
-# Validation and recommendations
-require_relative "../lib/magi/archive/mcp/server/tools/validate_card"
-require_relative "../lib/magi/archive/mcp/server/tools/get_recommendations"
-
 # Types and rendering
 require_relative "../lib/magi/archive/mcp/server/tools/get_types"
 require_relative "../lib/magi/archive/mcp/server/tools/render_content"
 
 # Admin operations
 require_relative "../lib/magi/archive/mcp/server/tools/admin_backup"
+
+# Card history and restore
+require_relative "../lib/magi/archive/mcp/server/tools/get_card_history"
+require_relative "../lib/magi/archive/mcp/server/tools/get_revision"
+require_relative "../lib/magi/archive/mcp/server/tools/restore_card"
+require_relative "../lib/magi/archive/mcp/server/tools/list_trash"
 
 # Weekly summaries
 require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
@@ -51,6 +54,9 @@ require_relative "../lib/magi/archive/mcp/server/tools/health_check"
 require_relative "../lib/magi/archive/mcp/server/tools/batch_cards"
 require_relative "../lib/magi/archive/mcp/server/tools/run_query"
 require_relative "../lib/magi/archive/mcp/server/tools/spoiler_scan"
+
+# Auto-linking
+require_relative "../lib/magi/archive/mcp/server/tools/auto_link"
 
 # Initialize the Magi Archive tools
 magi_tools = begin
@@ -83,6 +89,7 @@ mcp_server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::CreateCard,
     Magi::Archive::Mcp::Server::Tools::UpdateCard,
     Magi::Archive::Mcp::Server::Tools::DeleteCard,
+    Magi::Archive::Mcp::Server::Tools::RenameCard,
     Magi::Archive::Mcp::Server::Tools::ListChildren,
 
     # Tag operations
@@ -93,16 +100,18 @@ mcp_server = ::MCP::Server.new(
     # Relationships
     Magi::Archive::Mcp::Server::Tools::GetRelationships,
 
-    # Validation and recommendations
-    Magi::Archive::Mcp::Server::Tools::ValidateCard,
-    Magi::Archive::Mcp::Server::Tools::GetRecommendations,
-
     # Types and rendering
     Magi::Archive::Mcp::Server::Tools::GetTypes,
     Magi::Archive::Mcp::Server::Tools::RenderContent,
 
     # Admin operations
     Magi::Archive::Mcp::Server::Tools::AdminBackup,
+
+    # Card history and restore
+    Magi::Archive::Mcp::Server::Tools::GetCardHistory,
+    Magi::Archive::Mcp::Server::Tools::GetRevision,
+    Magi::Archive::Mcp::Server::Tools::RestoreCard,
+    Magi::Archive::Mcp::Server::Tools::ListTrash,
 
     # Weekly summaries
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
@@ -113,7 +122,10 @@ mcp_server = ::MCP::Server.new(
     # Phase 3: Advanced operations
     Magi::Archive::Mcp::Server::Tools::BatchCards,
     Magi::Archive::Mcp::Server::Tools::RunQuery,
-    Magi::Archive::Mcp::Server::Tools::SpoilerScan
+    Magi::Archive::Mcp::Server::Tools::SpoilerScan,
+
+    # Auto-linking
+    Magi::Archive::Mcp::Server::Tools::AutoLink
   ],
   server_context: server_context
 )

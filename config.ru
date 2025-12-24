@@ -28,26 +28,49 @@ mcp_server = ::MCP::Server.new(
   name: "magi-archive",
   version: Magi::Archive::Mcp::VERSION,
   tools: [
+    # Core card operations
     Magi::Archive::Mcp::Server::Tools::GetCard,
     Magi::Archive::Mcp::Server::Tools::SearchCards,
     Magi::Archive::Mcp::Server::Tools::CreateCard,
     Magi::Archive::Mcp::Server::Tools::UpdateCard,
     Magi::Archive::Mcp::Server::Tools::DeleteCard,
+    Magi::Archive::Mcp::Server::Tools::RenameCard,
     Magi::Archive::Mcp::Server::Tools::ListChildren,
+
+    # Tag operations
     Magi::Archive::Mcp::Server::Tools::GetTags,
     Magi::Archive::Mcp::Server::Tools::SearchByTags,
     Magi::Archive::Mcp::Server::Tools::SuggestTags,
+
+    # Relationships
     Magi::Archive::Mcp::Server::Tools::GetRelationships,
-    Magi::Archive::Mcp::Server::Tools::ValidateCard,
-    Magi::Archive::Mcp::Server::Tools::GetRecommendations,
+
+    # Types and rendering
     Magi::Archive::Mcp::Server::Tools::GetTypes,
     Magi::Archive::Mcp::Server::Tools::RenderContent,
+
+    # Admin operations
     Magi::Archive::Mcp::Server::Tools::AdminBackup,
+
+    # Card history and restore
+    Magi::Archive::Mcp::Server::Tools::GetCardHistory,
+    Magi::Archive::Mcp::Server::Tools::GetRevision,
+    Magi::Archive::Mcp::Server::Tools::RestoreCard,
+    Magi::Archive::Mcp::Server::Tools::ListTrash,
+
+    # Weekly summaries
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
+
+    # Health check
     Magi::Archive::Mcp::Server::Tools::HealthCheck,
+
+    # Phase 3: Advanced operations
     Magi::Archive::Mcp::Server::Tools::BatchCards,
     Magi::Archive::Mcp::Server::Tools::RunQuery,
-    Magi::Archive::Mcp::Server::Tools::SpoilerScan
+    Magi::Archive::Mcp::Server::Tools::SpoilerScan,
+
+    # Auto-linking
+    Magi::Archive::Mcp::Server::Tools::AutoLink
   ],
   server_context: server_context
 )

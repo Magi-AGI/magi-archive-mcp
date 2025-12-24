@@ -40,6 +40,12 @@ require_relative "../lib/magi/archive/mcp/server/tools/render_content"
 # Admin operations
 require_relative "../lib/magi/archive/mcp/server/tools/admin_backup"
 
+# Card history and restore
+require_relative "../lib/magi/archive/mcp/server/tools/get_card_history"
+require_relative "../lib/magi/archive/mcp/server/tools/get_revision"
+require_relative "../lib/magi/archive/mcp/server/tools/restore_card"
+require_relative "../lib/magi/archive/mcp/server/tools/list_trash"
+
 # Weekly summaries
 require_relative "../lib/magi/archive/mcp/server/tools/create_weekly_summary"
 
@@ -109,6 +115,12 @@ server = ::MCP::Server.new(
 
     # Admin operations
     Magi::Archive::Mcp::Server::Tools::AdminBackup,
+
+    # Card history and restore
+    Magi::Archive::Mcp::Server::Tools::GetCardHistory,
+    Magi::Archive::Mcp::Server::Tools::GetRevision,
+    Magi::Archive::Mcp::Server::Tools::RestoreCard,
+    Magi::Archive::Mcp::Server::Tools::ListTrash,
 
     # Weekly summaries
     Magi::Archive::Mcp::Server::Tools::CreateWeeklySummary,
