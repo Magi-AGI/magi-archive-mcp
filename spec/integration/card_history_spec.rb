@@ -308,6 +308,61 @@ RSpec.describe "Card History and Restore Operations", :integration do
         expect(restored["name"]).to eq(card_name)
         expect(restored["content"]).to include(content)
       end
+
+      it "sets trash flag to false after restoration" do
+        card_name = "#{test_prefix}_TrashFlagTest"
+        content = "Testing trash flag is properly cleared"
+
+        # Create card
+        tools.create_card(card_name, content: content, type: "RichText")
+        @created_cards = [card_name]
+
+        sleep 0.5
+
+        # Verify card is accessible (not in trash)
+        card_before = tools.get_card(card_name)
+        expect(card_before["name"]).to eq(card_name)
+
+        # Delete card (moves to trash)
+        tools.delete_card(card_name, force: true)
+        @created_cards = []
+
+        sleep 0.5
+
+        # Verify card is no longer accessible (in trash)
+        expect {
+          tools.get_card(card_name)
+        }.to raise_error(Magi::Archive::Mcp::Client::NotFoundError)
+
+        # Verify card appears in trash list
+        trash_before = tools.list_trash
+        trashed_card = trash_before["cards"].find { |c| c["name"] == card_name }
+        expect(trashed_card).not_to be_nil, "Card should appear in trash list after deletion"
+
+        # Restore from trash
+        result = tools.restore_card(card_name, from_trash: true)
+        @created_cards = [card_name]
+
+        expect(result["success"]).to be true
+
+        sleep 0.5
+
+        # CRITICAL: Verify card is accessible again (trash flag = false)
+        # This is the core assertion - the card must be fetchable after restoration
+        restored_card = tools.get_card(card_name)
+        expect(restored_card["name"]).to eq(card_name)
+        expect(restored_card["content"]).to include(content)
+
+        # Verify card no longer appears in trash list
+        trash_after = tools.list_trash
+        still_trashed = trash_after["cards"].find { |c| c["name"] == card_name }
+        expect(still_trashed).to be_nil, "Card should NOT appear in trash list after restoration"
+
+        # Verify card appears in search results (another indicator trash=false)
+        search_results = tools.search_cards(q: card_name)
+        found_card = search_results["cards"].find { |c| c["name"] == card_name }
+        expect(found_card).not_to be_nil, "Card should appear in search results after restoration"
+      end
     end
 
     context "error handling" do

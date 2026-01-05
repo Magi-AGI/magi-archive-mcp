@@ -69,10 +69,16 @@ module Magi
                   type: "text",
                   text: ErrorFormatter.not_found("Revision", "#{name} (act_id: #{act_id})")
                 }], error: true)
-              rescue Client::AuthorizationError
+              rescue Client::AuthorizationError => e
+                required_role = e.details&.dig("required_role") || "gm"
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: ErrorFormatter.authorization_error("view revision for", name, required_role: "gm")
+                  text: ErrorFormatter.authorization_error(
+                    "view revision for", name,
+                    required_role: required_role,
+                    api_message: e.message,
+                    api_details: e.details
+                  )
                 }], error: true)
               rescue Client::AuthenticationError => e
                 ::MCP::Tool::Response.new([{

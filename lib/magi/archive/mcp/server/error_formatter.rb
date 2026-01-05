@@ -102,8 +102,10 @@ module Magi
           # @param resource [String] what was being accessed
           # @param required_role [String, nil] role needed (if known)
           # @param current_role [String, nil] current user role (if available)
+          # @param api_message [String, nil] raw error message from Decko API
+          # @param api_details [Hash, nil] additional error details from Decko API
           # @return [String] formatted error message
-          def self.authorization_error(operation, resource, required_role: nil, current_role: nil)
+          def self.authorization_error(operation, resource, required_role: nil, current_role: nil, api_message: nil, api_details: nil)
             parts = []
             parts << "🔒 **Permission Denied**"
             parts << ""
@@ -115,6 +117,21 @@ module Magi
 
             if current_role
               parts << "**Your current role:** #{current_role}"
+            end
+
+            # Show raw API message if available (helps debug Decko-side issues)
+            if api_message && api_message != "Permission denied"
+              parts << ""
+              parts << "**API Message:** #{api_message}"
+            end
+
+            # Show additional details from Decko if available
+            if api_details && api_details.is_a?(Hash) && api_details.any?
+              parts << ""
+              parts << "**API Details:**"
+              api_details.each do |key, value|
+                parts << "- #{key}: #{value}" unless value.nil? || value.to_s.empty?
+              end
             end
 
             parts << ""
