@@ -1146,10 +1146,13 @@ module Magi
         end
 
         def encode_card_name(name)
-          # Encode all characters except: A-Z a-z 0-9 - _ . ~ +
+          # Encode all characters except: A-Z a-z 0-9 - _ ~ +
           # Keep + literal for Decko compound cards (e.g., "Parent+Child")
+          # NOTE: Periods (.) MUST be encoded as %2E because Rails interprets
+          # unencoded periods in URL paths as format separators (e.g., "Dr.Venn"
+          # would be parsed as format: "Venn"). This breaks cards like "Dr. Smith".
           name.chars.map do |char|
-            if char.match?(/[A-Za-z0-9\-_.~+]/)
+            if char.match?(/[A-Za-z0-9\-_~+]/)
               char
             else
               format("%%%02X", char.ord)
