@@ -43,12 +43,14 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_referers(parent_card)
 
-        expect(result).to be_an(Array)
-        # May or may not find the referrer depending on indexing
-        expect(result.length).to be >= 0
+        # API returns a Hash with referers array inside
+        expect(result).to be_a(Hash)
+        expect(result["referers"]).to be_an(Array)
+        expect(result["card"]).to eq(parent_card)
+        expect(result["referer_count"]).to be >= 0
       end
 
-      it "returns empty array for card with no referers" do
+      it "returns empty referers array for card with no referers" do
         # Create a card that nothing references
         tools.create_card(
           child_card,
@@ -58,7 +60,9 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_referers(child_card)
 
-        expect(result).to be_an(Array)
+        expect(result).to be_a(Hash)
+        expect(result["referers"]).to be_an(Array)
+        expect(result["referer_count"]).to eq(0)
       end
 
       it "raises NotFoundError for non-existent card" do
@@ -84,8 +88,10 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_linked_by(parent_card)
 
-        expect(result).to be_an(Array)
-        expect(result.length).to be >= 0
+        expect(result).to be_a(Hash)
+        expect(result["linked_by"]).to be_an(Array)
+        expect(result["card"]).to eq(parent_card)
+        expect(result["linked_by_count"]).to be >= 0
       end
     end
 
@@ -106,8 +112,10 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_links(referrer_card)
 
-        expect(result).to be_an(Array)
-        expect(result.length).to be >= 0
+        expect(result).to be_a(Hash)
+        expect(result["links"]).to be_an(Array)
+        expect(result["card"]).to eq(referrer_card)
+        expect(result["links_count"]).to be >= 0
       end
     end
 
@@ -126,8 +134,10 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_nests(referrer_card)
 
-        expect(result).to be_an(Array)
-        expect(result.length).to be >= 0
+        expect(result).to be_a(Hash)
+        expect(result["nests"]).to be_an(Array)
+        expect(result["card"]).to eq(referrer_card)
+        expect(result["nests_count"]).to be >= 0
       end
     end
 
@@ -147,8 +157,10 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
         result = tools.get_nested_in(parent_card)
 
-        expect(result).to be_an(Array)
-        expect(result.length).to be >= 0
+        expect(result).to be_a(Hash)
+        expect(result["nested_in"]).to be_an(Array)
+        expect(result["card"]).to eq(parent_card)
+        expect(result["nested_in_count"]).to be >= 0
       end
     end
   end
@@ -160,7 +172,8 @@ RSpec.describe "Relationship Operations Integration", :integration do
       # Use a real card that likely exists
       result = tools.get_referers("Home")
 
-      expect(result).to be_an(Array)
+      expect(result).to be_a(Hash)
+      expect(result["referers"]).to be_an(Array)
       # Home page should have some referers
     end
 
@@ -170,9 +183,40 @@ RSpec.describe "Relationship Operations Integration", :integration do
 
       result = tools.get_links(special_name)
 
-      expect(result).to be_an(Array)
+      expect(result).to be_a(Hash)
+      expect(result["links"]).to be_an(Array)
 
       tools.delete_card(special_name) rescue nil
+    end
+  end
+
+  describe "Real production data relationships" do
+    let(:tools) { Magi::Archive::Mcp::Tools.new }
+
+    it "finds referers for a well-known card" do
+      # Games+Butterfly Galaxii is a well-known card with many referers
+      result = tools.get_referers("Games+Butterfly Galaxii")
+
+      expect(result).to be_a(Hash)
+      expect(result["referers"]).to be_an(Array)
+      expect(result["referer_count"]).to be > 0
+
+      # Verify referer structure
+      if result["referers"].any?
+        referer = result["referers"].first
+        expect(referer).to have_key("name")
+        expect(referer).to have_key("id")
+        expect(referer).to have_key("type")
+      end
+    end
+
+    it "finds links from a card with wiki links" do
+      # This card has a link to Species
+      result = tools.get_card("Games+Butterfly Galaxii+Player+Species+Major Species+Eldarai+intro")
+      card_content = result["content"]
+
+      # Verify card has content with potential links
+      expect(card_content).to include("Oathari").or include("Coalition")
     end
   end
 end

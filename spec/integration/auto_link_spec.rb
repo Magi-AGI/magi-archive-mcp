@@ -27,7 +27,8 @@ RSpec.describe "Auto Link Operations", :integration do
   describe "suggest mode" do
     it "finds linkable terms in card content" do
       # Create a scope card and some child cards
-      scope_card = "#{test_prefix}_Scope"
+      # Use 3+ levels so derive_scope returns first 2 parts only
+      scope_card = "#{test_prefix}+Scope"
       term_card = "#{scope_card}+UniqueTermXYZ"
       content_card = "#{scope_card}+ContentCard"
 
@@ -191,6 +192,77 @@ RSpec.describe "Auto Link Operations", :integration do
       result = tools.auto_link(content_card, mode: "suggest", scope: other_scope)
 
       expect(result["scope"]).to eq(other_scope)
+    end
+  end
+
+  describe "Real production data auto_link" do
+    # These tests verify the auto_link fix that uses recursive descendant finding
+    # instead of the broken CQL name match query
+
+    it "finds terms from deep card hierarchy" do
+      # Test with the Eldarai intro card which mentions Oathari, Coalition of Planets, etc.
+      card_name = "Games+Butterfly Galaxii+Player+Species+Major Species+Eldarai+intro"
+
+      result = tools.auto_link(card_name, mode: "suggest")
+
+      expect(result).to be_a(Hash)
+      expect(result["scope"]).to eq("Games+Butterfly Galaxii")
+
+      # The term index should have many terms (not 0 like before the fix)
+      expect(result["stats"]["terms_in_index"]).to be > 100
+
+      # Should find suggestions for terms like Oathari, Coalition of Planets, etc.
+      expect(result["suggestions"]).to be_an(Array)
+      expect(result["suggestions"].size).to be > 0
+
+      # Check that at least one suggestion is for a known term
+      suggestion_terms = result["suggestions"].map { |s| s["term"] }
+      expect(suggestion_terms).to include("Oathari").or include("Coalition of Planets").or include("Zenith of the Beyond")
+    end
+
+    it "indexes cards recursively through left_id hierarchy" do
+      # Test that descendants at multiple levels are found
+      # The scope "Games+Butterfly Galaxii" should index cards like:
+      # - Games+Butterfly Galaxii+Player+Species+Major Species+Oathari (4 levels deep)
+      # - Games+Butterfly Galaxii+Player+Factions+Major Factions+Coalition of Planets (5 levels deep)
+
+      result = tools.auto_link(
+        "Games+Butterfly Galaxii+Player+Species+Major Species+Eldarai+intro",
+        mode: "suggest"
+      )
+
+      # Check stats show a substantial term index was built
+      expect(result["stats"]["terms_in_index"]).to be > 500
+    end
+
+    it "skips stopwords in production content" do
+      result = tools.auto_link(
+        "Games+Butterfly Galaxii+Player+Species+Major Species+Eldarai+intro",
+        mode: "suggest"
+      )
+
+      # Check that common stopwords are not in suggestions
+      suggestion_terms = result["suggestions"].map { |s| s["term"].downcase }
+      common_stopwords = %w[the and are was with from their]
+      common_stopwords.each do |stopword|
+        expect(suggestion_terms).not_to include(stopword)
+      end
+    end
+
+    it "generates valid preview in dry_run mode" do
+      result = tools.auto_link(
+        "Games+Butterfly Galaxii+Player+Species+Major Species+Eldarai+intro",
+        mode: "apply",
+        dry_run: true
+      )
+
+      expect(result["dry_run"]).to be true
+
+      # If suggestions were found, preview should contain wiki links
+      if result["suggestions"].any?
+        expect(result["preview"]).to include("[[")
+        expect(result["preview"]).to include("]]")
+      end
     end
   end
 
