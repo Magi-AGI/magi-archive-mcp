@@ -31,13 +31,19 @@ module Magi
                   type: "string",
                   enum: ["html", "markdown"],
                   description: "Target format"
+                },
+                max_output_length: {
+                  type: "integer",
+                  description: "Maximum converted content length to return (default: 8000 chars). Set to 0 for unlimited.",
+                  default: 8000,
+                  minimum: 0
                 }
               },
               required: ["content", "from_format", "to_format"]
             )
 
             class << self
-              def call(content:, from_format:, to_format:, server_context:)
+              def call(content:, from_format:, to_format:, max_output_length: 8000, server_context:)
                 tools = server_context[:magi_tools]
 
                 # Convert format strings to symbols
@@ -48,7 +54,7 @@ module Magi
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_result(content, from_format, to_format, result)
+                  text: format_result(from_format, to_format, result, max_output_length)
                 }])
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
@@ -59,27 +65,33 @@ module Magi
 
               private
 
-              def format_result(original, from_fmt, to_fmt, result)
+              def format_result(from_fmt, to_fmt, result, max_output_length)
                 # Extract the converted content from the API response hash
-                converted = extract_converted_content(result)
+                converted = extract_converted_content(result).to_s.strip
+                total_length = converted.length
 
                 parts = []
                 parts << "# Content Conversion"
                 parts << ""
                 parts << "**From:** #{from_fmt.upcase}"
                 parts << "**To:** #{to_fmt.upcase}"
+                parts << "**Output length:** #{total_length} characters"
                 parts << ""
-                parts << "## Original Content"
-                parts << ""
-                parts << "```#{from_fmt}"
-                parts << original
-                parts << "```"
-                parts << ""
+                # Note: Omitting original content to reduce response size (user already has it)
                 parts << "## Converted Content"
                 parts << ""
                 parts << "```#{to_fmt}"
-                parts << converted.to_s.strip
-                parts << "```"
+
+                if max_output_length > 0 && converted.length > max_output_length
+                  parts << converted[0...max_output_length]
+                  parts << "```"
+                  parts << ""
+                  parts << "**[Output truncated]** Showing #{max_output_length} of #{total_length} characters."
+                  parts << "Use `max_output_length: 0` for full output."
+                else
+                  parts << converted
+                  parts << "```"
+                end
 
                 parts.join("\n")
               end

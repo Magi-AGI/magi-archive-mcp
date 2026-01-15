@@ -49,20 +49,32 @@ module Magi
                 act_id: {
                   type: "integer",
                   description: "The revision act ID (from get_card_history)"
+                },
+                max_content_length: {
+                  type: "integer",
+                  description: "Maximum content length to return (default: 8000 chars). Set to 0 for unlimited.",
+                  default: 8000,
+                  minimum: 0
+                },
+                content_offset: {
+                  type: "integer",
+                  description: "Character offset to start content from (default: 0). Use for pagination.",
+                  default: 0,
+                  minimum: 0
                 }
               },
               required: %w[name act_id]
             )
 
             class << self
-              def call(name:, act_id:, server_context:)
+              def call(name:, act_id:, max_content_length: 8000, content_offset: 0, server_context:)
                 tools = server_context[:magi_tools]
 
                 revision = tools.get_revision(name, act_id: act_id)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_revision(revision)
+                  text: format_revision(revision, max_content_length: max_content_length, content_offset: content_offset)
                 }])
               rescue Client::NotFoundError
                 ::MCP::Tool::Response.new([{
@@ -94,7 +106,7 @@ module Magi
 
               private
 
-              def format_revision(revision)
+              def format_revision(revision, max_content_length: 8000, content_offset: 0)
                 parts = []
                 parts << "# Revision: #{revision['card']}"
                 parts << ""
@@ -113,11 +125,34 @@ module Magi
                 parts << "### Content"
                 parts << ""
 
-                content = snapshot["content"]
-                if content.nil? || content.to_s.strip.empty?
+                full_content = (snapshot["content"] || "").to_s.strip
+                total_length = full_content.length
+
+                if full_content.empty?
                   parts << "(empty)"
+                elsif content_offset >= total_length
+                  parts << "(offset #{content_offset} exceeds content length #{total_length})"
                 else
-                  parts << content
+                  remaining = full_content[content_offset..]
+
+                  if max_content_length > 0 && remaining.length > max_content_length
+                    parts << remaining[0...max_content_length]
+                    chars_shown_end = content_offset + max_content_length
+                    next_offset = chars_shown_end
+
+                    parts << ""
+                    parts << "---"
+                    parts << "**[Content paginated]** Showing characters #{content_offset + 1}-#{chars_shown_end} of #{total_length}."
+                    parts << "To get next chunk: `get_revision(name: \"#{revision['card']}\", act_id: #{revision['act_id']}, content_offset: #{next_offset})`"
+                  else
+                    parts << remaining
+
+                    if content_offset > 0
+                      parts << ""
+                      parts << "---"
+                      parts << "**[Content offset]** Showing characters #{content_offset + 1}-#{total_length} of #{total_length}."
+                    end
+                  end
                 end
 
                 parts << ""

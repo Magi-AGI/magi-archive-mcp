@@ -23,28 +23,65 @@ module Magi
                 id: {
                   type: "string",
                   description: "Card name/ID from search results (e.g., 'Main Page' or 'Business Plan+Executive Summary')"
+                },
+                max_content_length: {
+                  type: "integer",
+                  description: "Maximum content length to return (default: 8000 chars). Set to 0 for unlimited.",
+                  default: 8000,
+                  minimum: 0
+                },
+                content_offset: {
+                  type: "integer",
+                  description: "Character offset to start content from (default: 0). Use for pagination.",
+                  default: 0,
+                  minimum: 0
                 }
               },
               required: ["id"]
             )
 
             class << self
-              def call(id:, server_context:)
+              def call(id:, max_content_length: 8000, content_offset: 0, server_context:)
                 tools = server_context[:magi_tools]
 
                 # Use get_card to fetch the full card
                 card = tools.get_card(id)
 
+                # Apply content truncation/pagination
+                full_content = card['content'] || ""
+                total_length = full_content.length
+                truncated = false
+                next_offset = nil
+
+                text_content = if full_content.empty?
+                                 "No content available"
+                               elsif content_offset >= total_length
+                                 "(offset #{content_offset} exceeds content length #{total_length})"
+                               else
+                                 remaining = full_content[content_offset..]
+                                 if max_content_length > 0 && remaining.length > max_content_length
+                                   truncated = true
+                                   next_offset = content_offset + max_content_length
+                                   remaining[0...max_content_length]
+                                 else
+                                   remaining
+                                 end
+                               end
+
                 # Transform to ChatGPT connector format
                 result = {
                   id: card['name'],
                   title: card['name'],
-                  text: card['content'] || "No content available",
+                  text: text_content,
                   url: "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}",
                   metadata: {
                     type: card['type'],
                     created_at: card['created_at'],
-                    updated_at: card['updated_at']
+                    updated_at: card['updated_at'],
+                    total_length: total_length,
+                    content_offset: content_offset,
+                    truncated: truncated,
+                    next_offset: next_offset
                   }.compact
                 }
 
