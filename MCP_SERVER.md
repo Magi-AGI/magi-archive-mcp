@@ -156,6 +156,12 @@ ruby bin/install-claude-desktop
 
 # OR install for Codex
 ruby bin/install-codex
+
+# OR install for Cursor IDE
+ruby bin/install-cursor
+
+# OR install for Gemini CLI
+ruby bin/install-gemini
 ```
 
 **What the installer does:**
@@ -281,9 +287,59 @@ Claude Code uses a similar configuration file.
 }
 ```
 
-#### For ChatGPT Desktop
+#### For Cursor IDE
 
-ChatGPT Desktop support for MCP is planned. Configuration will follow a similar pattern when available.
+**Location (all platforms):**
+`~/.cursor/mcp.json`
+
+**Configuration:**
+```json
+{
+  "mcpServers": {
+    "magi-archive": {
+      "command": "ruby",
+      "args": [
+        "/absolute/path/to/magi-archive-mcp/bin/mcp-server",
+        "/absolute/path/to/working/directory"
+      ],
+      "env": {
+        "MCP_USERNAME": "your-username",
+        "MCP_PASSWORD": "your-password",
+        "DECKO_API_BASE_URL": "https://wiki.magi-agi.org/api/mcp"
+      }
+    }
+  }
+}
+```
+
+#### For Gemini CLI
+
+**Location (all platforms):**
+`~/.gemini/settings.json`
+
+**Configuration:**
+```json
+{
+  "mcpServers": {
+    "magi-archive": {
+      "command": "ruby",
+      "args": [
+        "/absolute/path/to/magi-archive-mcp/bin/mcp-server",
+        "/absolute/path/to/working/directory"
+      ],
+      "env": {
+        "MCP_USERNAME": "your-username",
+        "MCP_PASSWORD": "your-password",
+        "DECKO_API_BASE_URL": "https://wiki.magi-agi.org/api/mcp"
+      }
+    }
+  }
+}
+```
+
+#### For ChatGPT Desktop/Web
+
+ChatGPT uses the mcp.run platform for MCP server integration, which requires hosting the server publicly. For local testing, consider using Claude Desktop or Cursor instead. See `CHATGPT-USAGE-GUIDE.md` for details and known limitations.
 
 ### Platform-Specific Instructions
 

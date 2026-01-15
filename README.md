@@ -45,7 +45,33 @@ All core features, batch operations, and advanced capabilities are implemented a
 
 See [MCP-SPEC.md](MCP-SPEC.md) for complete API specification and [MCP_SERVER.md](MCP_SERVER.md) for usage guide.
 
-## Quick Start
+## Quick Install (Choose Your Client)
+
+**Prerequisites**: Ruby 3.2+ (`ruby --version` to check)
+
+```bash
+# Clone and install dependencies
+git clone https://github.com/Magi-AGI/magi-archive-mcp.git
+cd magi-archive-mcp
+bundle install
+
+# Then run the installer for your AI client:
+ruby bin/install-claude-desktop   # Claude Desktop (macOS/Windows/Linux)
+ruby bin/install-cursor           # Cursor IDE
+ruby bin/install-gemini           # Gemini CLI
+ruby bin/install-codex            # Codex CLI
+ruby bin/install-claude-cli       # Claude Code CLI
+```
+
+Each installer will prompt for your Decko wiki credentials (username/password recommended).
+
+**After installation**: Restart your AI client and try "Get the Main Page card from Magi Archive"
+
+See [MCP_SERVER.md](MCP_SERVER.md) for detailed installation instructions and troubleshooting.
+
+---
+
+## Quick Start (Library Usage)
 
 ### Basic Usage
 
@@ -525,6 +551,8 @@ See [MCP_SERVER.md](MCP_SERVER.md#security-best-practices) for comprehensive sec
 
 - **[MCP Server Guide](MCP_SERVER.md)** - Complete guide: installation, authentication, tools reference, security, deployment, troubleshooting
 - **[MCP Specification](MCP-SPEC.md)** - API specification and protocol details
+- **[ChatGPT Usage Guide](CHATGPT-USAGE-GUIDE.md)** - Correct usage patterns, common mistakes, and best practices
+- **[Known Issues](KNOWN-ISSUES.md)** - Current issues, investigations, and workarounds
 - **[Development Guide](AGENTS.md)** - Ruby development guidelines and project structure
 - **[Claude Code Guide](CLAUDE.md)** - Development guidance for AI-assisted coding
 - **[API Documentation](https://rubydoc.info/gems/magi-archive-mcp)** - YARD documentation
