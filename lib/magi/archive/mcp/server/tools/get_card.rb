@@ -33,20 +33,26 @@ module Magi
                   description: "Maximum content length to return (default: 8000 chars). Set to 0 for unlimited. Larger values may cause issues with some AI clients.",
                   default: 8000,
                   minimum: 0
+                },
+                content_offset: {
+                  type: "integer",
+                  description: "Character offset to start content from (default: 0). Use with max_content_length to paginate through large cards.",
+                  default: 0,
+                  minimum: 0
                 }
               },
               required: ["name"]
             )
 
             class << self
-              def call(name:, with_children: false, max_content_length: 8000, server_context:)
+              def call(name:, with_children: false, max_content_length: 8000, content_offset: 0, server_context:)
                 tools = server_context[:magi_tools]
 
                 card = tools.get_card(name, with_children: with_children)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_card(card, max_content_length: max_content_length)
+                  text: format_card(card, max_content_length: max_content_length, content_offset: content_offset)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -96,7 +102,7 @@ module Magi
                 content.strip.empty?
               end
 
-              def format_card(card, max_content_length: 8000)
+              def format_card(card, max_content_length: 8000, content_offset: 0)
                 parts = []
                 parts << "# #{card['name']}"
                 parts << ""
@@ -120,24 +126,39 @@ module Magi
                 parts << "## Content"
                 parts << ""
 
-                content = card['content'].to_s.strip
-                content_truncated = false
+                full_content = card['content'].to_s.strip
+                total_length = full_content.length
 
-                if content.empty?
+                if full_content.empty?
                   parts << '(empty)'
-                elsif max_content_length > 0 && content.length > max_content_length
-                  parts << content[0...max_content_length]
-                  content_truncated = true
+                elsif content_offset >= total_length
+                  parts << "(offset #{content_offset} exceeds content length #{total_length})"
                 else
-                  parts << content
-                end
+                  # Apply offset first, then limit
+                  remaining_content = full_content[content_offset..]
 
-                # Add truncation notice
-                if content_truncated
-                  parts << ""
-                  parts << "---"
-                  parts << "**[Content truncated]** Showing #{max_content_length} of #{content.length} characters."
-                  parts << "Use `max_content_length: 0` to get full content, or use pagination/sections if available."
+                  if max_content_length > 0 && remaining_content.length > max_content_length
+                    parts << remaining_content[0...max_content_length]
+
+                    # Calculate pagination info
+                    chars_shown_end = content_offset + max_content_length
+                    chars_remaining = total_length - chars_shown_end
+                    next_offset = chars_shown_end
+
+                    parts << ""
+                    parts << "---"
+                    parts << "**[Content paginated]** Showing characters #{content_offset + 1}-#{chars_shown_end} of #{total_length} (#{chars_remaining} remaining)."
+                    parts << "To get next chunk: `get_card(name: \"#{card['name']}\", content_offset: #{next_offset})`"
+                  else
+                    parts << remaining_content
+
+                    # Show offset info if we started mid-content
+                    if content_offset > 0
+                      parts << ""
+                      parts << "---"
+                      parts << "**[Content offset]** Showing characters #{content_offset + 1}-#{total_length} of #{total_length}."
+                    end
+                  end
                 end
 
                 # Add special note for Pointer and Search cards
