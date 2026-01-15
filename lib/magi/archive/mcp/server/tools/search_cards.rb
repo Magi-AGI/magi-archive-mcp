@@ -37,8 +37,8 @@ module Magi
                 },
                 limit: {
                   type: "integer",
-                  description: "Maximum number of results to return",
-                  default: 50,
+                  description: "Maximum number of results to return (default: 20 for faster responses)",
+                  default: 20,
                   minimum: 1,
                   maximum: 100
                 },
@@ -58,7 +58,7 @@ module Magi
             )
 
             class << self
-              def call(query: nil, type: nil, search_in: nil, limit: 50, offset: 0, include_virtual: false, server_context:)
+              def call(query: nil, type: nil, search_in: nil, limit: 20, offset: 0, include_virtual: false, server_context:)
                 tools = server_context[:magi_tools]
 
                 params = { limit: limit, offset: offset, include_virtual: include_virtual }

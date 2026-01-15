@@ -27,8 +27,8 @@ module Magi
                 },
                 limit: {
                   type: "integer",
-                  description: "Maximum number of children to return",
-                  default: 50,
+                  description: "Maximum number of children to return (default: 20 for faster responses)",
+                  default: 20,
                   minimum: 1,
                   maximum: 100
                 },
@@ -49,7 +49,7 @@ module Magi
             )
 
             class << self
-              def call(parent_name:, limit: 50, depth: 3, include_virtual: false, server_context:)
+              def call(parent_name:, limit: 20, depth: 3, include_virtual: false, server_context:)
                 tools = server_context[:magi_tools]
 
                 children = tools.list_children(parent_name, limit: limit, include_virtual: include_virtual, depth: depth)

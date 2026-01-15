@@ -27,20 +27,26 @@ module Magi
                   type: "boolean",
                   description: "Include child cards in the response",
                   default: false
+                },
+                max_content_length: {
+                  type: "integer",
+                  description: "Maximum content length to return (default: 8000 chars). Set to 0 for unlimited. Larger values may cause issues with some AI clients.",
+                  default: 8000,
+                  minimum: 0
                 }
               },
               required: ["name"]
             )
 
             class << self
-              def call(name:, with_children: false, server_context:)
+              def call(name:, with_children: false, max_content_length: 8000, server_context:)
                 tools = server_context[:magi_tools]
 
                 card = tools.get_card(name, with_children: with_children)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_card(card)
+                  text: format_card(card, max_content_length: max_content_length)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -90,7 +96,7 @@ module Magi
                 content.strip.empty?
               end
 
-              def format_card(card)
+              def format_card(card, max_content_length: 8000)
                 parts = []
                 parts << "# #{card['name']}"
                 parts << ""
@@ -105,7 +111,7 @@ module Magi
 
                 # Add virtual card indicator
                 if is_virtual
-                  parts << "**Virtual Card:** ⚠️ YES - This is a structural hierarchy card, DO NOT DELETE"
+                  parts << "**Virtual Card:** YES - This is a structural hierarchy card, DO NOT DELETE"
                 else
                   parts << "**Virtual Card:** No"
                 end
@@ -113,7 +119,26 @@ module Magi
                 parts << ""
                 parts << "## Content"
                 parts << ""
-                parts << (card['content'].to_s.strip.empty? ? '(empty)' : card['content'])
+
+                content = card['content'].to_s.strip
+                content_truncated = false
+
+                if content.empty?
+                  parts << '(empty)'
+                elsif max_content_length > 0 && content.length > max_content_length
+                  parts << content[0...max_content_length]
+                  content_truncated = true
+                else
+                  parts << content
+                end
+
+                # Add truncation notice
+                if content_truncated
+                  parts << ""
+                  parts << "---"
+                  parts << "**[Content truncated]** Showing #{max_content_length} of #{content.length} characters."
+                  parts << "Use `max_content_length: 0` to get full content, or use pagination/sections if available."
+                end
 
                 # Add special note for Pointer and Search cards
                 if card['type'] == 'Pointer'

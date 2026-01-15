@@ -37,68 +37,70 @@ This document tracks known issues, behaviors under investigation, and planned im
 
 ### Issue: MCP tools fail regularly when used with ChatGPT Desktop/Web/Mobile
 
-**Status**: Under Investigation
+**Status**: Mitigations Implemented (Monitoring)
 
 **Observed Behavior**:
 - MCP tools work initially but fail after sustained use
+- Tools disappear from interface or hang/timeout
 - Tools require manual reset to resume functioning
-- Appears to be related to ChatGPT's internal rate limiting of MCP tool invocations
+- Triggered by: large responses, many successive calls, or unpredictable factors
 
 **Root Cause Analysis**:
-ChatGPT's MCP connector has undocumented rate limits on tool calls. When the Magi Archive MCP server is called too frequently or returns responses that are too large, ChatGPT's internal system may throttle or block subsequent tool calls.
+ChatGPT's MCP connector has limits on tool calls. Per [OpenAI's MCP documentation](https://cookbook.openai.com/examples/mcp/mcp_tool_guide):
 
-This is NOT our API rate limiting - it's ChatGPT's client-side rate limiting of its own MCP tool invocation mechanism.
+1. **Tool schema limit**: All tool definitions must be < 5000 tokens combined
+2. **Response overhead**: Large responses consume context tokens and increase latency
+3. **Verbose data**: Returning full records (instead of relevant fields) causes issues
 
-**Potential Factors**:
-1. **Response size**: Large card content or search results may trigger limits
-2. **Call frequency**: Rapid successive tool calls may exceed limits
-3. **Token count**: Total tokens in tool responses may hit ChatGPT's context limits
+This is NOT our API rate limiting - it's ChatGPT's client-side constraints on MCP tool invocations.
 
-**Proposed Mitigations**:
+### Implemented Mitigations (v1.x.x)
 
-#### Option A: Response Size Limits
-Add configurable response truncation:
+#### Content Truncation (get_card)
+The `get_card` tool now accepts `max_content_length` parameter:
 ```ruby
-# In tools.rb - truncate large content
-def get_card(name, max_content_length: 5000)
-  card = client.get_card(name)
-  if card["content"]&.length > max_content_length
-    card["content"] = card["content"][0...max_content_length] + "\n\n[Content truncated. Use offset to retrieve more.]"
-  end
-  card
-end
+# Default: 8000 characters to prevent oversized responses
+get_card(name: "Some Card", max_content_length: 8000)
+
+# Use 0 for unlimited (may cause ChatGPT issues with large cards)
+get_card(name: "Some Card", max_content_length: 0)
 ```
 
-#### Option B: Search Result Limits
-Reduce default search limits for ChatGPT:
-```ruby
-# Detect ChatGPT client and adjust limits
-DEFAULT_SEARCH_LIMIT = 20  # Instead of 50
-```
+#### Reduced Default Limits
+- `search_cards`: Default limit reduced from 50 to 20
+- `list_children`: Default limit reduced from 50 to 20
 
-#### Option C: Batched Responses
-For large operations, return partial results with continuation tokens:
-```ruby
-{
-  "cards" => first_10_cards,
-  "has_more" => true,
-  "continuation_token" => "abc123"
-}
-```
+These can still be overridden for clients that support larger responses.
 
-#### Option D: Client-Specific Configuration
-Allow per-client configuration in environment:
+### Best Practices from OpenAI
+
+Per [OpenAI Cookbook MCP Guide](https://cookbook.openai.com/examples/mcp/mcp_tool_guide):
+- Keep tool descriptions crisp: 1-2 sentences
+- Return only relevant fields, not entire data objects
+- Use `allowed_tools` parameter to limit exposed tools
+- Avoid verbose definitions that add hundreds of tokens
+
+### Future Improvements (Planned)
+
+#### Option A: Client-Specific Configuration
+Allow per-client limits in environment:
 ```bash
-CHATGPT_MAX_RESPONSE_SIZE=5000
+CHATGPT_MAX_CONTENT_LENGTH=5000
 CHATGPT_MAX_SEARCH_RESULTS=10
-CHATGPT_DELAY_BETWEEN_CALLS_MS=500
 ```
+
+#### Option B: Streaming Responses
+Implement streaming for large responses to avoid timeouts.
+
+#### Option C: Tool Schema Optimization
+Review and optimize tool descriptions to reduce token count.
 
 **User Workarounds**:
-1. Use smaller, more specific queries
-2. Reset MCP tools when they stop responding (in ChatGPT settings)
-3. Break large operations into multiple smaller requests
-4. Consider using Claude Desktop for heavy wiki operations
+1. Use `max_content_length` parameter for large cards
+2. Use smaller limits in queries (e.g., `limit: 10`)
+3. Reset MCP tools when they stop responding (ChatGPT settings)
+4. Break large operations into multiple smaller requests
+5. Consider Claude Desktop for heavy wiki operations
 
 ---
 
