@@ -21,9 +21,11 @@ class CodexInstaller
     # Check if server script exists
     unless File.exist?(@server_path)
       puts "❌ Error: MCP server not found at #{@server_path}"
-      puts "Please run 'bundle install' first"
       exit 1
     end
+
+    # Install Ruby dependencies
+    install_dependencies
 
     # Make server executable
     FileUtils.chmod(0755, @server_path)
@@ -139,6 +141,40 @@ class CodexInstaller
   end
 
   private
+
+  def install_dependencies
+    puts "📦 Installing Ruby dependencies..."
+    puts ""
+
+    # Check if bundle command exists
+    bundle_exists = system("which bundle > /dev/null 2>&1") || system("where bundle > NUL 2>&1")
+
+    unless bundle_exists
+      puts "⚠️  Bundler not found. Installing bundler..."
+      unless system("gem install bundler")
+        puts "❌ Error: Failed to install bundler"
+        puts "Please install bundler manually: gem install bundler"
+        exit 1
+      end
+    end
+
+    # Run bundle install in gem root directory
+    Dir.chdir(@gem_root) do
+      puts "Running bundle install in #{@gem_root}..."
+      puts ""
+
+      unless system("bundle install")
+        puts ""
+        puts "❌ Error: bundle install failed"
+        puts "Please check that Ruby and Bundler are properly installed."
+        exit 1
+      end
+    end
+
+    puts ""
+    puts "✅ Dependencies installed successfully!"
+    puts ""
+  end
 
   def get_username_password
     print "Decko email address: "
