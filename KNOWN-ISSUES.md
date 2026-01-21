@@ -119,6 +119,31 @@ All content-returning tools support pagination via `content_offset` parameter.
 Claude Desktop's MCP implementation is more stable for sustained wiki operations.
 Consider using ChatGPT for reads/exploration and Claude Desktop for bulk writes.
 
+### Alternative: Use mcp-proxy for ChatGPT
+
+The [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy) Python package is a well-tested
+bridge between stdio MCP servers and HTTP/SSE transport. Some users report better stability
+with ChatGPT when using mcp-proxy to wrap their MCP servers.
+
+**Quick Setup:**
+```bash
+# Install mcp-proxy
+pipx install mcp-proxy
+
+# Run proxy wrapping our stdio server
+mcp-proxy --sse-port=8888 bundle exec bin/mcp-server
+
+# Expose via tailscale (or similar)
+tailscale funnel 8888
+```
+
+Then configure ChatGPT connector to use `https://your-host.ts.net/sse`.
+
+**Why this may help:**
+- mcp-proxy is battle-tested with ChatGPT's MCP implementation
+- Handles SSE transport edge cases that our Rack server might not
+- Official MCP SDK recommends "Streamable HTTP transport" for production
+
 ### References
 
 - [OpenAI Community Thread](https://community.openai.com/t/mcp-server-tools-now-in-chatgpt-developer-mode/1357233/81)
@@ -200,4 +225,5 @@ If you discover a new issue:
 
 ## Version History
 
+- 2025-01-21: Updated ChatGPT diagnosis (bridge instability not rate limiting), added mcp-proxy alternative
 - 2025-01-15: Initial document with role investigation, ChatGPT rate limiting, installation issues
