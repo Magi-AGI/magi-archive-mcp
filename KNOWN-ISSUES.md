@@ -33,74 +33,96 @@ This document tracks known issues, behaviors under investigation, and planned im
 
 ---
 
-## 2. ChatGPT Integration Rate Limiting
+## 2. ChatGPT MCP Bridge Instability
 
-### Issue: MCP tools fail regularly when used with ChatGPT Desktop/Web/Mobile
+### Issue: MCP tools fail with "Resource not found" errors in ChatGPT
 
-**Status**: Mitigations Implemented (Monitoring)
+**Status**: Confirmed ChatGPT Client-Side Issue (Not Rate Limiting)
 
 **Observed Behavior**:
-- MCP tools work initially but fail after sustained use
-- Tools disappear from interface or hang/timeout
-- Tools require manual reset to resume functioning
-- Triggered by: large responses, many successive calls, or unpredictable factors
+- Tools work initially, then fail with `Resource not found: .../link_<hash>/tool_name`
+- Tool registry becomes **empty** after failures (not rate limited)
+- Reads often succeed while writes fail
+- Refreshing tools sometimes restores functionality, sometimes shows empty registry
+- Tools disappear from interface requiring manual reset
 
-**Root Cause Analysis**:
-ChatGPT's MCP connector has limits on tool calls. Per [OpenAI's MCP documentation](https://cookbook.openai.com/examples/mcp/mcp_tool_guide):
+**Root Cause (Confirmed through testing)**:
 
-1. **Tool schema limit**: All tool definitions must be < 5000 tokens combined
-2. **Response overhead**: Large responses consume context tokens and increase latency
-3. **Verbose data**: Returning full records (instead of relevant fields) causes issues
+This is **NOT** a rate limit or token limit issue. It's ChatGPT's internal MCP bridge
+losing the tool routing handle (`link_<hash>`) mid-session.
 
-This is NOT our API rate limiting - it's ChatGPT's client-side constraints on MCP tool invocations.
+Evidence:
+1. Error is "Resource not found" not "rate limit" or "quota exceeded"
+2. After failure, `list_resources` returns `{"finite": true}` with **no tools**
+3. Small payloads (~650 tokens) fail the same as large ones
+4. Single read + single write can trigger the failure
+5. The `link_<hash>` handle can change or become invalid between calls
 
-### Implemented Mitigations (v1.x.x)
+This matches reports in the [OpenAI Community Thread](https://community.openai.com/t/mcp-server-tools-now-in-chatgpt-developer-mode/1357233/81):
+- "ResourceNotFound ... link_<hash> ..." even when tools are listed
+- "Works better with fewer tools"
+- Tool registry desyncing mid-conversation
 
-#### Content Truncation (get_card)
-The `get_card` tool now accepts `max_content_length` parameter:
+### Recommended Workflow for ChatGPT Users
+
+#### Preflight Check Before Writes
+```
+1. Run list_resources(only_tools=true, refetch_tools=true)
+2. If tools are NOT listed → reset/reconnect tools first
+3. If tools ARE listed → proceed with ONE write, then stop
+```
+
+#### One Write Per Stable Window
+Even if tools exist, do at most **one write** before re-checking the registry.
+Writes seem to trigger the registry drop more than reads.
+
+#### Use batch_cards for Multiple Updates
+Instead of multiple `update_card` calls:
 ```ruby
-# Default: 8000 characters to prevent oversized responses
-get_card(name: "Some Card", max_content_length: 8000)
+# BAD: Multiple writes = multiple chances for registry to drop
+update_card(name: "Card1", content: "...")
+update_card(name: "Card2", content: "...")  # May fail
 
-# Use 0 for unlimited (may cause ChatGPT issues with large cards)
-get_card(name: "Some Card", max_content_length: 0)
+# GOOD: Single write for multiple cards
+batch_cards(operations: [
+  {action: "update", name: "Card1", content: "..."},
+  {action: "update", name: "Card2", content: "..."}
+])
 ```
 
-#### Reduced Default Limits
-- `search_cards`: Default limit reduced from 50 to 20
-- `list_children`: Default limit reduced from 50 to 20
+#### Minimize Enabled Tools
+Disable unused tools on the connector. Community reports reliability improving
+when reducing tool count (some users had 70+ tools causing issues).
 
-These can still be overridden for clients that support larger responses.
+#### Reset Tools When Needed
+Use ChatGPT's "refresh tools / toggle tools" UI to re-sync the connector
+when tools stop responding.
 
-### Best Practices from OpenAI
+### Response Size Optimizations (Still Helpful)
 
-Per [OpenAI Cookbook MCP Guide](https://cookbook.openai.com/examples/mcp/mcp_tool_guide):
-- Keep tool descriptions crisp: 1-2 sentences
-- Return only relevant fields, not entire data objects
-- Use `allowed_tools` parameter to limit exposed tools
-- Avoid verbose definitions that add hundreds of tokens
+While not the root cause, smaller responses reduce bridge overhead:
 
-### Future Improvements (Planned)
+| Tool | Parameter | Default |
+|------|-----------|---------|
+| `get_card` | `max_content_length` | 8000 chars |
+| `fetch` | `max_content_length` | 8000 chars |
+| `get_revision` | `max_content_length` | 8000 chars |
+| `render_content` | `max_output_length` | 8000 chars |
+| `search_cards` | `limit` | 20 results |
+| `list_children` | `limit` | 20 results |
+| `run_query` | `limit` | 20 results |
 
-#### Option A: Client-Specific Configuration
-Allow per-client limits in environment:
-```bash
-CHATGPT_MAX_CONTENT_LENGTH=5000
-CHATGPT_MAX_SEARCH_RESULTS=10
-```
+All content-returning tools support pagination via `content_offset` parameter.
 
-#### Option B: Streaming Responses
-Implement streaming for large responses to avoid timeouts.
+### Alternative: Use Claude Desktop for Heavy Work
 
-#### Option C: Tool Schema Optimization
-Review and optimize tool descriptions to reduce token count.
+Claude Desktop's MCP implementation is more stable for sustained wiki operations.
+Consider using ChatGPT for reads/exploration and Claude Desktop for bulk writes.
 
-**User Workarounds**:
-1. Use `max_content_length` parameter for large cards
-2. Use smaller limits in queries (e.g., `limit: 10`)
-3. Reset MCP tools when they stop responding (ChatGPT settings)
-4. Break large operations into multiple smaller requests
-5. Consider Claude Desktop for heavy wiki operations
+### References
+
+- [OpenAI Community Thread](https://community.openai.com/t/mcp-server-tools-now-in-chatgpt-developer-mode/1357233/81)
+- [OpenAI MCP Documentation](https://platform.openai.com/docs/guides/tools-connectors-mcp)
 
 ---
 
