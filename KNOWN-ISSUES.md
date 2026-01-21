@@ -1,6 +1,6 @@
 # Known Issues and Investigation Notes
 
-**Last Updated**: 2025-01-15
+**Last Updated**: 2026-01-21
 
 This document tracks known issues, behaviors under investigation, and planned improvements.
 
@@ -37,7 +37,7 @@ This document tracks known issues, behaviors under investigation, and planned im
 
 ### Issue: MCP tools fail with "Resource not found" errors in ChatGPT
 
-**Status**: Confirmed ChatGPT Client-Side Issue (Not Rate Limiting)
+**Status**: Mitigated (Server-side alignment completed 2026-01-21)
 
 **Observed Behavior**:
 - Tools work initially, then fail with `Resource not found: .../link_<hash>/tool_name`
@@ -62,6 +62,39 @@ This matches reports in the [OpenAI Community Thread](https://community.openai.c
 - "ResourceNotFound ... link_<hash> ..." even when tools are listed
 - "Works better with fewer tools"
 - Tool registry desyncing mid-conversation
+
+### Server-Side Mitigations (Implemented)
+
+We've implemented several server-side changes to improve ChatGPT compatibility:
+
+#### 1. SSE Transport Alignment (commit `22feceb`)
+
+ChatGPT appears to use the older MCP SSE transport (pre-2025-03-26). We now support both:
+
+| Transport | Endpoint | Session ID | Status Code |
+|-----------|----------|------------|-------------|
+| Old SSE (ChatGPT) | `/messages?session_id={uuid}` | URL query param | 202 Accepted |
+| Streamable HTTP | `/message`, `/sse` | `Mcp-Session-Id` header | 200 OK |
+
+The SSE endpoint event now sends the full URL with session_id:
+```
+event: endpoint
+data: /messages?session_id={uuid}
+```
+
+#### 2. Response Format Alignment (commit `f9e73ff`)
+
+ChatGPT requires specific response shapes for `search` and `fetch` tools:
+
+**For `search` tool:**
+- Top level MUST be `{"results": [...]}`
+- `id` and `title` are **REQUIRED** fields
+- `source` is preferred over `url` (we provide both)
+- `snippet` added for context
+
+**For `fetch` tool:**
+- Returns `{id, title, text, source, url, metadata}`
+- `source` included alongside `url`
 
 ### Recommended Workflow for ChatGPT Users
 
