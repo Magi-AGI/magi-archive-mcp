@@ -39,15 +39,17 @@ module Magi
 
                 if card_name
                   tags = tools.get_card_tags(card_name)
+                  response = build_card_tags_response(card_name, tags)
                   ::MCP::Tool::Response.new([{
                     type: "text",
-                    text: format_card_tags(card_name, tags)
+                    text: JSON.generate(response)
                   }])
                 else
                   tags = tools.get_all_tags(limit: limit)
+                  response = build_all_tags_response(tags)
                   ::MCP::Tool::Response.new([{
                     type: "text",
-                    text: format_all_tags(tags)
+                    text: JSON.generate(response)
                   }])
                 end
               rescue Client::NotFoundError => e
@@ -63,6 +65,35 @@ module Magi
               end
 
               private
+
+              def build_card_tags_response(card_name, tags)
+                card_url = "https://wiki.magi-agi.org/#{card_name.to_s.gsub(' ', '_')}"
+
+                {
+                  id: card_name,
+                  title: "Tags for #{card_name}",
+                  source: card_url,
+                  url: card_url,
+                  results: tags.map { |tag| { id: tag, title: tag } },
+                  total: tags.size,
+                  text: format_card_tags(card_name, tags)
+                }
+              end
+
+              def build_all_tags_response(tags)
+                result_items = (tags || []).map do |tag|
+                  tag_name = tag.is_a?(Hash) ? tag['name'] : tag
+                  { id: tag_name, title: tag_name }
+                end
+
+                {
+                  id: "all_tags",
+                  title: "All Tags",
+                  results: result_items,
+                  total: result_items.size,
+                  text: format_all_tags(tags)
+                }
+              end
 
               def format_card_tags(card_name, tags)
                 parts = []

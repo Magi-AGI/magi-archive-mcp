@@ -74,9 +74,12 @@ module Magi
                 # Perform batch operation
                 result = tools.batch_operations(operations, mode: mode)
 
+                # Build hybrid JSON response
+                response = build_response(result, mode)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_batch_result(result, mode)
+                  text: JSON.generate(response)
                 }])
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
@@ -99,6 +102,37 @@ module Magi
               end
 
               private
+
+              def build_response(result, mode)
+                results = result["results"] || []
+                successful = results.count { |r| r["status"] == "ok" }
+                failed = results.count { |r| r["status"] == "error" }
+
+                # Transform results to ChatGPT-compatible format
+                result_items = results.map do |r|
+                  card_url = r['name'] ? "https://wiki.magi-agi.org/#{r['name'].to_s.gsub(' ', '_')}" : nil
+                  {
+                    id: r['name'],
+                    title: r['name'],
+                    status: r['status'],
+                    source: card_url,
+                    url: card_url,
+                    error: r['status'] == 'error' ? r['message'] : nil
+                  }.compact
+                end
+
+                {
+                  status: failed == 0 ? "success" : (successful == 0 ? "error" : "partial"),
+                  results: result_items,
+                  text: format_batch_result(result, mode),
+                  metadata: {
+                    mode: mode,
+                    total: results.size,
+                    successful: successful,
+                    failed: failed
+                  }
+                }
+              end
 
               def error_response(message)
                 ::MCP::Tool::Response.new([{

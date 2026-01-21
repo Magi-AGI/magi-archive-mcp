@@ -67,9 +67,12 @@ module Magi
                 # Run the query
                 result = tools.client.post("/run_query", query: query, limit: limit, offset: offset)
 
+                # Build hybrid JSON response
+                response = build_response(result)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_query_results(result)
+                  text: JSON.generate(response)
                 }])
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
@@ -92,6 +95,35 @@ module Magi
               end
 
               private
+
+              def build_response(result)
+                results = result["results"] || []
+                total = result["total"] || 0
+                limit_val = result["limit"] || 50
+                offset = result["offset"] || 0
+                next_offset = result["next_offset"]
+
+                # Transform to ChatGPT-compatible results array
+                result_items = results.map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+                  {
+                    id: card['name'],
+                    title: card['name'],
+                    snippet: "#{card['type']} - Updated: #{card['updated_at']}",
+                    source: card_url,
+                    url: card_url
+                  }
+                end
+
+                {
+                  results: result_items,
+                  total: total,
+                  offset: offset,
+                  limit: limit_val,
+                  next_offset: next_offset,
+                  text: format_query_results(result)
+                }.compact
+              end
 
               def error_response(message)
                 ::MCP::Tool::Response.new([{

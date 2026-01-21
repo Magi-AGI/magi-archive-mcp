@@ -72,9 +72,12 @@ module Magi
 
                 revision = tools.get_revision(name, act_id: act_id)
 
+                # Build hybrid JSON response
+                response = build_response(name, act_id, revision, max_content_length: max_content_length, content_offset: content_offset)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_revision(revision, max_content_length: max_content_length, content_offset: content_offset)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError
                 ::MCP::Tool::Response.new([{
@@ -105,6 +108,43 @@ module Magi
               end
 
               private
+
+              def build_response(name, act_id, revision, max_content_length:, content_offset:)
+                card_url = "https://wiki.magi-agi.org/#{name.to_s.gsub(' ', '_')}"
+                snapshot = revision["snapshot"] || {}
+                full_content = (snapshot["content"] || "").to_s.strip
+                total_length = full_content.length
+
+                # Calculate pagination
+                truncated = false
+                next_offset = nil
+                if content_offset < total_length && max_content_length > 0
+                  remaining = full_content[content_offset..]
+                  if remaining && remaining.length > max_content_length
+                    truncated = true
+                    next_offset = content_offset + max_content_length
+                  end
+                end
+
+                {
+                  id: "#{name}@#{act_id}",
+                  title: "Revision #{act_id}: #{name}",
+                  source: card_url,
+                  url: card_url,
+                  text: format_revision(revision, max_content_length: max_content_length, content_offset: content_offset),
+                  metadata: {
+                    act_id: revision['act_id'],
+                    acted_at: revision['acted_at'],
+                    actor: revision['actor'],
+                    card_name: revision['card'],
+                    snapshot_type: snapshot['type'],
+                    total_length: total_length,
+                    content_offset: content_offset,
+                    truncated: truncated,
+                    next_offset: next_offset
+                  }.compact
+                }
+              end
 
               def format_revision(revision, max_content_length: 8000, content_offset: 0)
                 parts = []

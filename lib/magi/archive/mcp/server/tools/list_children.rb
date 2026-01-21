@@ -54,9 +54,12 @@ module Magi
 
                 children = tools.list_children(parent_name, limit: limit, include_virtual: include_virtual, depth: depth)
 
+                # Build hybrid JSON response
+                response = build_response(parent_name, children)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_children(parent_name, children)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -87,6 +90,35 @@ module Magi
               end
 
               private
+
+              def build_response(parent_name, children)
+                child_cards = children["children"] || []
+                total = children["total"] || child_cards.size
+
+                # Transform to ChatGPT-compatible results array
+                result_items = child_cards.map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+                  {
+                    id: card['name'],
+                    title: card['name'],
+                    snippet: "#{card['type']} card#{card['updated_at'] ? " - Updated: #{card['updated_at']}" : ''}",
+                    source: card_url,
+                    url: card_url
+                  }
+                end
+
+                parent_url = "https://wiki.magi-agi.org/#{parent_name.to_s.gsub(' ', '_')}"
+
+                {
+                  id: parent_name,
+                  title: "Children of #{parent_name}",
+                  source: parent_url,
+                  url: parent_url,
+                  results: result_items,
+                  total: total,
+                  text: format_children(parent_name, children)
+                }
+              end
 
               def format_children(parent_name, children)
                 parts = []

@@ -60,9 +60,12 @@ module Magi
                 # Get existing tags for comparison if card_name provided
                 existing_tags = card_name ? tools.get_card_tags(card_name) : []
 
+                # Build hybrid JSON response
+                response = build_response(suggestions, existing_tags, card_name)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_suggestions(suggestions, existing_tags, card_name)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -77,6 +80,31 @@ module Magi
               end
 
               private
+
+              def build_response(suggestions, existing_tags, card_name)
+                result_items = suggestions.map do |tag|
+                  {
+                    id: tag,
+                    title: tag,
+                    status: existing_tags.include?(tag) ? "already_tagged" : "suggested"
+                  }
+                end
+
+                card_url = card_name ? "https://wiki.magi-agi.org/#{card_name.to_s.gsub(' ', '_')}" : nil
+
+                {
+                  id: card_name || "tag_suggestions",
+                  title: card_name ? "Tag Suggestions for #{card_name}" : "Tag Suggestions",
+                  source: card_url,
+                  url: card_url,
+                  results: result_items,
+                  total: suggestions.size,
+                  text: format_suggestions(suggestions, existing_tags, card_name),
+                  metadata: {
+                    existing_tags: existing_tags
+                  }.compact
+                }.compact
+              end
 
               def error_response(message)
                 ::MCP::Tool::Response.new([{

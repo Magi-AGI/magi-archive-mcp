@@ -47,9 +47,12 @@ module Magi
 
                 card = tools.create_card(name, **params)
 
+                # Build hybrid JSON response
+                response = build_response(card)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_created_card(card)
+                  text: JSON.generate(response)
                 }])
               rescue Client::ValidationError => e
                 ::MCP::Tool::Response.new([{
@@ -78,6 +81,23 @@ module Magi
               end
 
               private
+
+              def build_response(card)
+                card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+
+                {
+                  status: "success",
+                  id: card['name'],
+                  title: card['name'],
+                  source: card_url,
+                  url: card_url,
+                  text: format_created_card(card),
+                  metadata: {
+                    type: card['type'],
+                    card_id: card['id']
+                  }.compact
+                }
+              end
 
               def format_created_card(card)
                 parts = []

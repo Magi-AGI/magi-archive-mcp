@@ -35,9 +35,12 @@ module Magi
 
                 result = tools.list_types(limit: limit)
 
+                # Build hybrid JSON response
+                response = build_response(result)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_types(result)
+                  text: JSON.generate(response)
                 }])
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
@@ -47,6 +50,26 @@ module Magi
               end
 
               private
+
+              def build_response(result)
+                types = result["types"] || []
+                total = result["total"] || types.size
+
+                result_items = types.map do |type|
+                  {
+                    id: type['name'],
+                    title: type['name']
+                  }
+                end
+
+                {
+                  id: "card_types",
+                  title: "Card Types",
+                  results: result_items,
+                  total: total,
+                  text: format_types(result)
+                }
+              end
 
               def format_types(result)
                 types = result["types"] || []

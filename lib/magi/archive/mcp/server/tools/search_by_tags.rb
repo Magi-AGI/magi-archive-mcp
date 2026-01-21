@@ -50,9 +50,12 @@ module Magi
                            tools.search_by_tags(tags, limit: limit)
                          end
 
+                # Build hybrid JSON response
+                response = build_response(tags, match_mode, results)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_results(tags, match_mode, results)
+                  text: JSON.generate(response)
                 }])
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
@@ -62,6 +65,33 @@ module Magi
               end
 
               private
+
+              def build_response(tags, match_mode, results)
+                cards = results["cards"] || []
+                total = results["total"] || 0
+
+                # Transform to ChatGPT-compatible results array
+                result_items = cards.map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+                  {
+                    id: card['name'],
+                    title: card['name'],
+                    snippet: card['type'],
+                    source: card_url,
+                    url: card_url
+                  }
+                end
+
+                {
+                  results: result_items,
+                  total: total,
+                  text: format_results(tags, match_mode, results),
+                  metadata: {
+                    tags: tags,
+                    match_mode: match_mode
+                  }
+                }
+              end
 
               def format_results(tags, match_mode, results)
                 cards = results["cards"] || []

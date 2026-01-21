@@ -71,15 +71,24 @@ module Magi
                 if !i_verified_not_virtual && name.include?("+")
                   return ::MCP::Tool::Response.new([{
                     type: "text",
-                    text: format_virtual_warning(name)
+                    text: JSON.generate({
+                      status: "blocked",
+                      id: name,
+                      title: "Deletion Blocked - Possible Virtual Card",
+                      text: format_virtual_warning(name),
+                      metadata: { reason: "virtual_card_check" }
+                    })
                   }], error: true)
                 end
 
                 result = tools.delete_card(name, force: force)
 
+                # Build hybrid JSON response
+                response = build_response(name, result)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_deletion(name, result)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -109,6 +118,16 @@ module Magi
               end
 
               private
+
+              def build_response(name, _result)
+                {
+                  status: "success",
+                  id: name,
+                  title: "Card Deleted",
+                  text: format_deletion(name, _result),
+                  metadata: { action: "deleted" }
+                }
+              end
 
               def format_virtual_warning(name)
                 parts = []
