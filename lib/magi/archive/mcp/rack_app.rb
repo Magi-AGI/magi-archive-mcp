@@ -14,7 +14,8 @@ module Magi
           '127.0.0.1:3002',
           'localhost',
           'localhost:3002',
-          'mcp.magi-agi.org'
+          'mcp.magi-agi.org',
+          'magi-archive-mcp-proxy.lake-watkins.workers.dev'
         ].freeze
 
         def initialize(app)
