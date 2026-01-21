@@ -61,20 +61,25 @@ module Magi
       end
 
       # SSE Streamer for MCP protocol
+      # Supports both old SSE transport (session_id in URL) and new Streamable HTTP (header)
       class SSEStreamer
+        def initialize(session_id)
+          @session_id = session_id
+        end
+
         def each
-          # Send initial endpoint event
-          # ChatGPT POSTs to the same /sse URL, so advertise that
+          # Send initial endpoint event with session_id in URL
+          # This is the OLD SSE transport format that ChatGPT expects
+          # Format: /messages?session_id={uuid}
           yield "event: endpoint\n"
-          yield "data: /sse\n\n"
+          yield "data: /messages?session_id=#{@session_id}\n\n"
 
           # Keep connection alive with periodic keepalive messages
-          # In production, this would be managed by the client disconnecting
-          # For now, send keepalives every 30 seconds
+          # MCP SSE spec recommends 15 second intervals
           begin
             loop do
-              sleep 30
-              yield ": keepalive\n\n"
+              sleep 15
+              yield ": keepalive #{Time.now.iso8601}\n\n"
             end
           rescue IOError, Errno::EPIPE
             # Client disconnected
@@ -137,8 +142,8 @@ module Magi
               'X-Accel-Buffering' => 'no' # Disable nginx buffering
             }, session_id)
 
-            # Return async response that will be hijacked by Puma
-            [200, headers, SSEStreamer.new]
+            # Return async response with session_id for endpoint event
+            [200, headers, SSEStreamer.new(session_id)]
 
           when ['GET', '/.well-known/oauth-authorization-server']
             # Minimal OAuth discovery for Claude.ai compatibility
@@ -173,9 +178,28 @@ module Magi
               expires_in: 31536000  # 1 year - effectively permanent for authless
             })]]
 
-          when ['POST', '/'], ['POST', '/sse'], ['POST', '/sse/'], ['POST', '/message']
-            # Handle MCP messages on /sse, /sse/, and /message endpoints
-            # ChatGPT posts to /sse or /sse/, other clients may use /message
+          when ['POST', '/'], ['POST', '/sse'], ['POST', '/sse/'], ['POST', '/message'], ['POST', '/messages']
+            # Handle MCP messages on multiple endpoints for compatibility:
+            # - /sse, /sse/ : Original endpoints
+            # - /message : Streamable HTTP style
+            # - /messages : Old SSE transport style (with session_id query param)
+
+            # For /messages endpoint, extract session_id from query param (old SSE transport)
+            if request.path == '/messages' || request.path.start_with?('/messages?')
+              query_session_id = request.params['session_id']
+              if query_session_id && self.class.session_manager.exists?(query_session_id)
+                session_id = query_session_id
+              elsif query_session_id
+                # Session ID provided but not found - return 404 per SSE spec
+                headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
+                return [404, headers, [JSON.generate({
+                  jsonrpc: '2.0',
+                  id: nil,
+                  error: { code: -32001, message: 'Session not found', data: { session_id: query_session_id } }
+                })]]
+              end
+            end
+
             begin
               body = request.body.read
               request_data = JSON.parse(body, symbolize_names: true)
@@ -184,7 +208,9 @@ module Magi
               response = self.class.mcp_server_instance.handle(request_data)
 
               headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-              [200, headers, [JSON.generate(response)]]
+              # Return 202 Accepted for /messages (old SSE transport expects this)
+              status_code = (request.path == '/messages' || request.path.start_with?('/messages?')) ? 202 : 200
+              [status_code, headers, [JSON.generate(response)]]
             rescue JSON::ParserError => e
               error_response = {
                 jsonrpc: '2.0',
@@ -217,13 +243,13 @@ module Magi
             accept_header = env['HTTP_ACCEPT'] || ''
 
             if accept_header.include?('text/event-stream')
-              # Return SSE stream for MCP clients
+              # Return SSE stream for MCP clients with session_id for endpoint event
               headers = add_mcp_headers({
                 'Content-Type' => 'text/event-stream',
                 'Cache-Control' => 'no-cache',
                 'X-Accel-Buffering' => 'no'
               }, session_id)
-              [200, headers, SSEStreamer.new]
+              [200, headers, SSEStreamer.new(session_id)]
             else
               # Return JSON metadata for browsers/discovery
               headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
@@ -231,12 +257,14 @@ module Magi
                 name: 'magi-archive-mcp',
                 version: Magi::Archive::Mcp::VERSION,
                 protocol: 'mcp',
-                protocol_version: '2025-06-18',
+                protocol_version: '2025-03-26',
                 transport: 'streamable-http',
+                transports_supported: ['streamable-http', 'sse'],
                 endpoints: {
                   health: '/health',
                   sse: '/sse',
-                  message: '/message'
+                  messages: '/messages',  # Old SSE transport (ChatGPT)
+                  message: '/message'     # Streamable HTTP
                 },
                 tools_count: self.class.mcp_server_instance.tools.length
               })]]
