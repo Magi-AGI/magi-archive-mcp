@@ -69,11 +69,15 @@ module Magi
                                end
 
                 # Transform to ChatGPT connector format
+                # ChatGPT expects: id, title, text, url/source, metadata
+                # source is preferred over url - include both for compatibility
+                card_url = "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}"
                 result = {
                   id: card['name'],
                   title: card['name'],
                   text: text_content,
-                  url: "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}",
+                  source: card_url,
+                  url: card_url,
                   metadata: {
                     type: card['type'],
                     created_at: card['created_at'],
