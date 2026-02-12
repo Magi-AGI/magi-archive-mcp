@@ -34,31 +34,56 @@ module Magi
         end
       end
 
-      # Simple session manager for MCP protocol
+      # Session manager for MCP protocol with TTL and cleanup
       class SessionManager
+        SESSION_TTL = 7200 # 2 hours
+        CLEANUP_INTERVAL = 300 # 5 minutes
+
         def initialize
           @sessions = {}
           @mutex = Mutex.new
+          @last_cleanup = Time.now
         end
 
         def get_or_create(session_id = nil)
           @mutex.synchronize do
+            cleanup_expired
             if session_id && @sessions.key?(session_id)
+              @sessions[session_id][:last_used_at] = Time.now
               session_id
             else
               new_id = SecureRandom.uuid
-              @sessions[new_id] = { created_at: Time.now }
+              @sessions[new_id] = { created_at: Time.now, last_used_at: Time.now }
               new_id
             end
           end
         end
 
         def exists?(session_id)
-          @mutex.synchronize { @sessions.key?(session_id) }
+          @mutex.synchronize do
+            return false unless @sessions.key?(session_id)
+
+            @sessions[session_id][:last_used_at] = Time.now
+            true
+          end
         end
 
         def delete(session_id)
           @mutex.synchronize { @sessions.delete(session_id) }
+        end
+
+        def size
+          @mutex.synchronize { @sessions.size }
+        end
+
+        private
+
+        def cleanup_expired
+          return if Time.now - @last_cleanup < CLEANUP_INTERVAL
+
+          now = Time.now
+          @sessions.delete_if { |_id, data| now - data[:last_used_at] > SESSION_TTL }
+          @last_cleanup = now
         end
       end
 
@@ -92,6 +117,18 @@ module Magi
       # Pure Rack app without Sinatra - complete control over middleware
       # rubocop:disable Metrics/ClassLength
       class RackApp
+        # CORS headers required by OpenAI Streamable HTTP transport
+        CORS_HEADERS = {
+          "Access-Control-Allow-Origin" => "*",
+          "Access-Control-Allow-Methods" => "GET, POST, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers" => "Content-Type, Authorization, Mcp-Session-Id, mcp-session-id",
+          "Access-Control-Expose-Headers" => "Mcp-Session-Id, MCP-Protocol-Version",
+          "Access-Control-Max-Age" => "86400"
+        }.freeze
+
+        # Cached health response TTL (seconds)
+        HEALTH_CACHE_TTL = 30
+
         class << self
           attr_accessor :mcp_server_instance, :token_issuer, :credential_store, :client_cards, :rate_limiter
 
@@ -115,17 +152,27 @@ module Magi
           end
         end
 
-        # Add MCP protocol headers to response
+        def initialize
+          @health_cache = nil
+          @health_cached_at = nil
+        end
+
+        # Add MCP protocol and CORS headers to response
         def add_mcp_headers(headers, session_id)
-          headers.merge({
-                          "MCP-Protocol-Version" => "2025-06-18",
-                          "Mcp-Session-Id" => session_id
-                        })
+          headers.merge(CORS_HEADERS).merge({
+                                              "MCP-Protocol-Version" => "2025-06-18",
+                                              "Mcp-Session-Id" => session_id
+                                            })
         end
 
         # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/AbcSize
         def call(env)
           request = Rack::Request.new(env)
+
+          # Handle CORS preflight for all paths
+          if request.request_method == "OPTIONS"
+            return [204, add_mcp_headers({ "Content-Type" => "text/plain" }, ""), []]
+          end
 
           # Extract session ID from request or create new one
           incoming_session_id = env["HTTP_MCP_SESSION_ID"]
@@ -138,7 +185,7 @@ module Magi
           when ["GET", "/debug-headers"]
             handle_debug_headers(env, session_id)
 
-          when ["GET", "/sse"], ["GET", "/sse/"]
+          when ["GET", "/sse"], ["GET", "/sse/"], ["GET", "/mcp"], ["GET", "/mcp/"]
             handle_sse(session_id)
 
           when ["GET", "/.well-known/oauth-protected-resource"]
@@ -162,10 +209,12 @@ module Magi
           when ["POST", "/revoke"]
             handle_revoke(request, session_id)
 
-          when ["POST", "/"], ["POST", "/sse"], ["POST", "/sse/"], ["POST", "/message"], ["POST", "/messages"]
+          when ["POST", "/"], ["POST", "/sse"], ["POST", "/sse/"],
+               ["POST", "/mcp"], ["POST", "/mcp/"],
+               ["POST", "/message"], ["POST", "/messages"]
             handle_mcp_message(request, env, session_id)
 
-          when ["DELETE", "/sse"], ["DELETE", "/sse/"]
+          when ["DELETE", "/sse"], ["DELETE", "/sse/"], ["DELETE", "/mcp"], ["DELETE", "/mcp/"]
             handle_session_delete(incoming_session_id, session_id)
 
           when ["GET", "/"]
@@ -182,11 +231,20 @@ module Magi
 
         def handle_health(session_id)
           headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
-          [200, headers, [JSON.generate({
+
+          # Cache health response to avoid repeated upstream calls when Decko is slow
+          now = Time.now
+          if @health_cache && @health_cached_at && (now - @health_cached_at < HEALTH_CACHE_TTL)
+            return [200, headers, [@health_cache]]
+          end
+
+          @health_cache = JSON.generate({
                                           status: "healthy",
                                           version: Magi::Archive::Mcp::VERSION,
-                                          timestamp: Time.now.iso8601
-                                        })]]
+                                          timestamp: now.iso8601
+                                        })
+          @health_cached_at = now
+          [200, headers, [@health_cache]]
         end
 
         def handle_debug_headers(env, session_id)
@@ -494,6 +552,7 @@ module Magi
                                             transports_supported: %w[streamable-http sse],
                                             endpoints: {
                                               health: "/health",
+                                              mcp: "/mcp",
                                               sse: "/sse",
                                               messages: "/messages",
                                               message: "/message"

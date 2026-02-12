@@ -280,8 +280,10 @@ module Magi
             "Content-Type" => "application/json"
           }
 
-          # Configure HTTP client with SSL settings
-          http_client = HTTP.headers(headers)
+          # Configure HTTP client with SSL settings and timeouts
+          # Timeouts prevent hanging when Decko is slow, returning errors before
+          # ChatGPT's ~15s timeout kills the connection (causing nginx 499s)
+          http_client = HTTP.headers(headers).timeout(connect: 5, write: 5, read: 8)
           http_client = configure_ssl(http_client)
 
           response = case method
