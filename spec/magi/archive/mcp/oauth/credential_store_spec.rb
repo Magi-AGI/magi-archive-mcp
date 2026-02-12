@@ -129,6 +129,97 @@ RSpec.describe Magi::Archive::Mcp::OAuth::CredentialStore do
     end
   end
 
+  describe "#store_auth_code and #consume_auth_code" do
+    let(:code) { SecureRandom.urlsafe_base64(32) }
+
+    it "stores and consumes an auth code" do
+      store.store_auth_code(
+        code,
+        client_id: "client-123",
+        redirect_uri: "https://example.com/callback",
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        code_challenge_method: "S256",
+        username: "alice@example.com",
+        password: "secret",
+        role: "user"
+      )
+
+      data = store.consume_auth_code(code)
+      expect(data[:client_id]).to eq("client-123")
+      expect(data[:redirect_uri]).to eq("https://example.com/callback")
+      expect(data[:code_challenge]).to eq("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+      expect(data[:username]).to eq("alice@example.com")
+      expect(data[:password]).to eq("secret")
+      expect(data[:role]).to eq("user")
+    end
+
+    it "consumes auth code only once (single-use)" do
+      store.store_auth_code(code, client_id: "c1", username: "a", password: "p", role: "user")
+
+      expect(store.consume_auth_code(code)).not_to be_nil
+      expect(store.consume_auth_code(code)).to be_nil
+    end
+
+    it "returns nil for unknown auth code" do
+      expect(store.consume_auth_code("nonexistent")).to be_nil
+    end
+
+    it "returns nil for expired auth code" do
+      store.store_auth_code(code, client_id: "c1", username: "a", password: "p", role: "user")
+
+      # Simulate expiry
+      store.instance_variable_get(:@auth_codes)[code][:created_at] =
+        Time.now - described_class::AUTH_CODE_TTL - 1
+
+      expect(store.consume_auth_code(code)).to be_nil
+    end
+  end
+
+  describe "#store_registered_client and #get_registered_client" do
+    let(:client_id) { SecureRandom.uuid }
+
+    it "stores and retrieves a registered client" do
+      store.store_registered_client(
+        client_id,
+        client_name: "Test App",
+        redirect_uris: ["https://example.com/callback"],
+        grant_types: ["authorization_code"]
+      )
+
+      data = store.get_registered_client(client_id)
+      expect(data[:client_name]).to eq("Test App")
+      expect(data[:redirect_uris]).to eq(["https://example.com/callback"])
+      expect(data[:grant_types]).to eq(["authorization_code"])
+    end
+
+    it "returns nil for unknown client" do
+      expect(store.get_registered_client("nonexistent")).to be_nil
+    end
+
+    it "returns nil for expired registered client" do
+      store.store_registered_client(client_id, client_name: "Old App")
+
+      store.instance_variable_get(:@registered_clients)[client_id][:created_at] =
+        Time.now - described_class::REGISTERED_CLIENT_TTL - 1
+
+      expect(store.get_registered_client(client_id)).to be_nil
+    end
+  end
+
+  describe "#registered_client_count and #auth_code_count" do
+    it "returns correct counts" do
+      expect(store.registered_client_count).to eq(0)
+      expect(store.auth_code_count).to eq(0)
+
+      store.store_registered_client("c1", client_name: "App1")
+      store.store_registered_client("c2", client_name: "App2")
+      store.store_auth_code("code1", client_id: "c1", username: "a", password: "p", role: "user")
+
+      expect(store.registered_client_count).to eq(2)
+      expect(store.auth_code_count).to eq(1)
+    end
+  end
+
   describe "#cleanup!" do
     it "removes expired sessions" do
       store.store_session(session_id, username: "alice", role: "user", tools: tools_double)
@@ -164,6 +255,26 @@ RSpec.describe Magi::Archive::Mcp::OAuth::CredentialStore do
 
       store.cleanup!
       expect(store.refresh_token_count).to eq(0)
+    end
+
+    it "removes expired auth codes" do
+      store.store_auth_code("code1", client_id: "c1", username: "a", password: "p", role: "user")
+
+      store.instance_variable_get(:@auth_codes)["code1"][:created_at] =
+        Time.now - described_class::AUTH_CODE_TTL - 1
+
+      store.cleanup!
+      expect(store.auth_code_count).to eq(0)
+    end
+
+    it "removes expired registered clients" do
+      store.store_registered_client("c1", client_name: "Old App")
+
+      store.instance_variable_get(:@registered_clients)["c1"][:created_at] =
+        Time.now - described_class::REGISTERED_CLIENT_TTL - 1
+
+      store.cleanup!
+      expect(store.registered_client_count).to eq(0)
     end
   end
 

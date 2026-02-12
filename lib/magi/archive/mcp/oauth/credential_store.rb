@@ -20,9 +20,17 @@ module Magi
           # How long refresh tokens remain valid (24 hours)
           REFRESH_TOKEN_TTL = 86_400
 
+          # How long authorization codes remain valid (60 seconds per OAuth spec)
+          AUTH_CODE_TTL = 60
+
+          # How long dynamically registered clients remain valid (24 hours)
+          REGISTERED_CLIENT_TTL = 86_400
+
           def initialize
             @sessions = {}
             @refresh_tokens = {}
+            @auth_codes = {}
+            @registered_clients = {}
             @mutex = Mutex.new
           end
 
@@ -123,9 +131,74 @@ module Magi
             end
           end
 
-          # Clean up expired sessions and refresh tokens
+          # Store an authorization code with associated data
+          #
+          # @param code [String] the authorization code
+          # @param data [Hash] associated data (client_id, redirect_uri, code_challenge, etc.)
+          # @return [void]
+          def store_auth_code(code, **data)
+            @mutex.synchronize do
+              @auth_codes[code] = data.merge(created_at: Time.now)
+            end
+          end
+
+          # Consume an authorization code (single-use, atomic delete+return)
+          #
+          # @param code [String] the authorization code
+          # @return [Hash, nil] code data or nil if not found/expired
+          def consume_auth_code(code)
+            @mutex.synchronize do
+              data = @auth_codes.delete(code)
+              return nil unless data
+              return nil if Time.now - data[:created_at] > AUTH_CODE_TTL
+
+              data
+            end
+          end
+
+          # Store a dynamically registered client
+          #
+          # @param client_id [String] the generated client ID
+          # @param data [Hash] client metadata (client_name, redirect_uris, etc.)
+          # @return [void]
+          def store_registered_client(client_id, **data)
+            @mutex.synchronize do
+              @registered_clients[client_id] = data.merge(created_at: Time.now)
+            end
+          end
+
+          # Get a registered client's data
+          #
+          # @param client_id [String] the client ID
+          # @return [Hash, nil] client data or nil if not found/expired
+          def get_registered_client(client_id)
+            @mutex.synchronize do
+              data = @registered_clients[client_id]
+              return nil unless data
+              return nil if Time.now - data[:created_at] > REGISTERED_CLIENT_TTL
+
+              data
+            end
+          end
+
+          # Number of registered clients
+          #
+          # @return [Integer]
+          def registered_client_count
+            @mutex.synchronize { @registered_clients.size }
+          end
+
+          # Number of active auth codes
+          #
+          # @return [Integer]
+          def auth_code_count
+            @mutex.synchronize { @auth_codes.size }
+          end
+
+          # Clean up expired sessions, refresh tokens, auth codes, and registered clients
           #
           # @return [Integer] number of sessions purged
+          # rubocop:disable Metrics/AbcSize
           def cleanup!
             @mutex.synchronize do
               now = Time.now
@@ -133,10 +206,13 @@ module Magi
               expired_sessions.each_key { |id| @sessions.delete(id) }
 
               @refresh_tokens.reject! { |_, v| now - v[:created_at] > REFRESH_TOKEN_TTL }
+              @auth_codes.reject! { |_, v| now - v[:created_at] > AUTH_CODE_TTL }
+              @registered_clients.reject! { |_, v| now - v[:created_at] > REGISTERED_CLIENT_TTL }
 
               expired_sessions.size
             end
           end
+          # rubocop:enable Metrics/AbcSize
 
           # Number of active sessions
           #

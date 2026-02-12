@@ -98,6 +98,8 @@ begin
   require_relative '../lib/magi/archive/mcp/oauth/credential_store'
   require_relative '../lib/magi/archive/mcp/oauth/client_cards'
   require_relative '../lib/magi/archive/mcp/oauth/rate_limiter'
+  require_relative '../lib/magi/archive/mcp/oauth/pkce_verifier'
+  require_relative '../lib/magi/archive/mcp/oauth/login_page'
 
   token_issuer = Magi::Archive::Mcp::OAuth::TokenIssuer.new
   credential_store = Magi::Archive::Mcp::OAuth::CredentialStore.new

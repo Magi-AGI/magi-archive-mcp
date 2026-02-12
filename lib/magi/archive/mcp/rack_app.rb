@@ -147,6 +147,12 @@ module Magi
           when ["GET", "/.well-known/oauth-authorization-server"]
             handle_authorization_server_metadata(session_id)
 
+          when ["GET", "/authorize"]
+            handle_authorize_get(request, session_id)
+
+          when ["POST", "/authorize"]
+            handle_authorize_post(request, session_id)
+
           when ["POST", "/register"]
             handle_register(request, session_id)
 
@@ -224,31 +230,55 @@ module Magi
           headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
           [200, headers, [JSON.generate({
                                           issuer: issuer_url,
+                                          authorization_endpoint: "#{issuer_url}/authorize",
                                           token_endpoint: "#{issuer_url}/token",
                                           revocation_endpoint: "#{issuer_url}/revoke",
                                           registration_endpoint: "#{issuer_url}/register",
-                                          grant_types_supported: %w[client_credentials refresh_token],
-                                          token_endpoint_auth_methods_supported: ["client_secret_post"],
+                                          response_types_supported: ["code"],
+                                          code_challenge_methods_supported: ["S256"],
+                                          grant_types_supported:
+                                            %w[authorization_code refresh_token client_credentials],
+                                          token_endpoint_auth_methods_supported: %w[client_secret_post none],
                                           scopes_supported: ["mcp:read", "mcp:write", "mcp:admin"]
                                         })]]
         end
 
-        # Dynamic Client Registration (DCR)
+        # Dynamic Client Registration (RFC 7591)
+        # rubocop:disable Metrics/MethodLength
         def handle_register(request, session_id)
           headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
           body = parse_request_body(request)
 
-          # Generate a client_id for DCR compatibility
-          # Actual credential creation happens via bin/install-oauth
           client_id = SecureRandom.uuid
+          client_name = body["client_name"] || "MCP Client"
+          redirect_uris = body["redirect_uris"] || []
+          grant_types = body["grant_types"] || ["authorization_code"]
+          response_types = body["response_types"] || ["code"]
+          token_auth_method = body["token_endpoint_auth_method"] || "none"
+
+          # Store the registered client for later validation
+          if self.class.oauth_enabled?
+            self.class.credential_store.store_registered_client(
+              client_id,
+              client_name: client_name,
+              redirect_uris: redirect_uris,
+              grant_types: grant_types,
+              response_types: response_types,
+              token_endpoint_auth_method: token_auth_method
+            )
+          end
+
           [201, headers, [JSON.generate({
                                           client_id: client_id,
                                           client_id_issued_at: Time.now.to_i,
-                                          client_name: body["client_name"] || "MCP Client",
-                                          grant_types: body["grant_types"] || ["client_credentials"],
-                                          token_endpoint_auth_method: "client_secret_post"
+                                          client_name: client_name,
+                                          redirect_uris: redirect_uris,
+                                          grant_types: grant_types,
+                                          response_types: response_types,
+                                          token_endpoint_auth_method: token_auth_method
                                         })]]
         end
+        # rubocop:enable Metrics/MethodLength
 
         # OAuth Token Endpoint - core authentication
         def handle_token(request, session_id)
@@ -259,6 +289,8 @@ module Magi
           grant_type = params["grant_type"]
 
           case grant_type
+          when "authorization_code"
+            handle_authorization_code_grant(params, headers, session_id)
           when "client_credentials"
             handle_client_credentials(params, headers, session_id)
           when "refresh_token"
@@ -471,6 +503,231 @@ module Magi
           end
         end
         # rubocop:enable Metrics/MethodLength
+
+        # --- Authorization Code + PKCE flow ---
+
+        # GET /authorize - render login page
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+        def handle_authorize_get(request, session_id)
+          params = request.params
+          response_type = params["response_type"]
+          client_id = params["client_id"]
+          code_challenge = params["code_challenge"]
+          code_challenge_method = params["code_challenge_method"]
+
+          # Validate required OAuth params
+          unless response_type == "code" && client_id && code_challenge && code_challenge_method == "S256"
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_request",
+                                                   error_description: "Missing or invalid OAuth parameters. " \
+                                                                      "Required: response_type=code, client_id, " \
+                                                                      "code_challenge, code_challenge_method=S256"
+                                                 })]]
+          end
+
+          # Look up client name from DCR registration
+          client_name = "MCP Client"
+          if self.class.oauth_enabled?
+            registered = self.class.credential_store.get_registered_client(client_id)
+            client_name = registered[:client_name] if registered
+          end
+
+          # Render login page with OAuth params as hidden fields
+          oauth_params = {
+            response_type: response_type,
+            client_id: client_id,
+            redirect_uri: params["redirect_uri"],
+            code_challenge: code_challenge,
+            code_challenge_method: code_challenge_method,
+            state: params["state"],
+            scope: params["scope"]
+          }
+
+          html = Magi::Archive::Mcp::OAuth::LoginPage.render(
+            params: oauth_params,
+            client_name: client_name
+          )
+
+          headers = add_mcp_headers({ "Content-Type" => "text/html" }, session_id)
+          [200, headers, [html]]
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize
+
+        # POST /authorize - authenticate user and redirect with auth code
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        def handle_authorize_post(request, session_id)
+          params = request.params
+          email = params["email"]
+          password = params["password"]
+          redirect_uri = params["redirect_uri"]
+          client_id = params["client_id"]
+          state = params["state"]
+          code_challenge = params["code_challenge"]
+          code_challenge_method = params["code_challenge_method"]
+
+          # Validate redirect_uri is present
+          unless redirect_uri && !redirect_uri.empty?
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_request",
+                                                   error_description: "redirect_uri is required"
+                                                 })]]
+          end
+
+          # Authenticate with Decko
+          role = authenticate_with_decko(email, password)
+          unless role
+            # Auth failed - re-render login page with error
+            oauth_params = {
+              response_type: params["response_type"],
+              client_id: client_id,
+              redirect_uri: redirect_uri,
+              code_challenge: code_challenge,
+              code_challenge_method: code_challenge_method,
+              state: state,
+              scope: params["scope"]
+            }
+
+            client_name = "MCP Client"
+            if self.class.oauth_enabled?
+              registered = self.class.credential_store.get_registered_client(client_id)
+              client_name = registered[:client_name] if registered
+            end
+
+            html = Magi::Archive::Mcp::OAuth::LoginPage.render(
+              params: oauth_params,
+              error: "Invalid email or password. Please try again.",
+              client_name: client_name
+            )
+            headers = add_mcp_headers({ "Content-Type" => "text/html" }, session_id)
+            return [200, headers, [html]]
+          end
+
+          # Generate authorization code and store it
+          code = SecureRandom.urlsafe_base64(32)
+          if self.class.oauth_enabled?
+            self.class.credential_store.store_auth_code(
+              code,
+              client_id: client_id,
+              redirect_uri: redirect_uri,
+              code_challenge: code_challenge,
+              code_challenge_method: code_challenge_method,
+              scope: params["scope"],
+              username: email,
+              password: password,
+              role: role
+            )
+          end
+
+          # 302 redirect back to the client with the auth code
+          redirect_params = { code: code }
+          redirect_params[:state] = state if state && !state.empty?
+          location = build_redirect_url(redirect_uri, redirect_params)
+
+          headers = add_mcp_headers({ "Location" => location }, session_id)
+          [302, headers, []]
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        # Handle authorization_code grant type in token endpoint
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        def handle_authorization_code_grant(params, headers, _session_id)
+          code = params["code"]
+          code_verifier = params["code_verifier"]
+          client_id = params["client_id"]
+          redirect_uri = params["redirect_uri"]
+
+          unless self.class.oauth_enabled?
+            return [400, headers, [JSON.generate({
+                                                   error: "server_error",
+                                                   error_description: "OAuth is not configured"
+                                                 })]]
+          end
+
+          unless code && code_verifier
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_request",
+                                                   error_description: "code and code_verifier are required"
+                                                 })]]
+          end
+
+          # Consume the auth code (single-use)
+          code_data = self.class.credential_store.consume_auth_code(code)
+          unless code_data
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_grant",
+                                                   error_description: "Authorization code is invalid or expired"
+                                                 })]]
+          end
+
+          # Validate client_id and redirect_uri match
+          if code_data[:client_id] != client_id
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_grant",
+                                                   error_description: "client_id does not match"
+                                                 })]]
+          end
+
+          if code_data[:redirect_uri] != redirect_uri
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_grant",
+                                                   error_description: "redirect_uri does not match"
+                                                 })]]
+          end
+
+          # Verify PKCE
+          unless Magi::Archive::Mcp::OAuth::PkceVerifier.verify(
+            code_verifier: code_verifier,
+            code_challenge: code_data[:code_challenge],
+            method: code_data[:code_challenge_method] || "S256"
+          )
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_grant",
+                                                   error_description: "PKCE verification failed"
+                                                 })]]
+          end
+
+          # Issue tokens using stored credentials
+          issue_token_response(code_data, headers)
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        # Authenticate a user against Decko and return their role.
+        # Forces a token fetch to validate credentials against Decko API.
+        #
+        # @param email [String] Decko email
+        # @param password [String] Decko password
+        # @return [String, nil] role string or nil if auth failed
+        def authenticate_with_decko(email, password)
+          return nil if blank?(email) || blank?(password)
+
+          tools = create_user_tools(email, password, "user")
+          # Force token fetch to actually validate credentials against Decko
+          tools.client.auth.token
+          config = tools.client.config
+          config.respond_to?(:role) && config.role ? config.role : "user"
+        rescue StandardError
+          nil
+        end
+
+        # Check if a string is nil or empty
+        def blank?(str)
+          str.nil? || str.empty?
+        end
+
+        # Build a redirect URL with query parameters
+        #
+        # @param base_url [String] the base redirect URI
+        # @param params [Hash] query parameters to append
+        # @return [String] the full redirect URL
+        def build_redirect_url(base_url, params)
+          uri = URI.parse(base_url)
+          existing_params = URI.decode_www_form(uri.query || "")
+          params.each { |k, v| existing_params << [k.to_s, v.to_s] }
+          uri.query = URI.encode_www_form(existing_params)
+          uri.to_s
+        end
 
         # --- Helper methods ---
 

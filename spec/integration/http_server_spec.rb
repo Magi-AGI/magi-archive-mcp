@@ -417,7 +417,7 @@ RSpec.describe "MCP HTTP Server", :integration do
   end
 
   describe "OAuth Discovery Endpoints" do
-    it "returns OAuth authorization server metadata" do
+    it "returns OAuth authorization server metadata with PKCE support" do
       response = http_client.get("#{server_url}/.well-known/oauth-authorization-server")
 
       expect(response.status).to eq(200)
@@ -426,17 +426,55 @@ RSpec.describe "MCP HTTP Server", :integration do
       expect(body).to have_key("issuer")
       expect(body).to have_key("token_endpoint")
       expect(body).to have_key("registration_endpoint")
+      expect(body).to have_key("authorization_endpoint")
+      expect(body["authorization_endpoint"]).to include("/authorize")
+      expect(body["response_types_supported"]).to include("code")
+      expect(body["code_challenge_methods_supported"]).to include("S256")
+      expect(body["grant_types_supported"]).to include("authorization_code")
+      expect(body["token_endpoint_auth_methods_supported"]).to include("none")
     end
 
-    it "handles client registration" do
+    it "handles dynamic client registration with redirect_uris" do
       response = http_client
         .headers("Content-Type" => "application/json")
-        .post("#{server_url}/register", json: {})
+        .post("#{server_url}/register", json: {
+                client_name: "Test App",
+                redirect_uris: ["https://example.com/callback"],
+                grant_types: ["authorization_code"],
+                response_types: ["code"],
+                token_endpoint_auth_method: "none"
+              })
 
       expect(response.status).to eq(201)
 
       body = JSON.parse(response.body.to_s)
       expect(body).to have_key("client_id")
+      expect(body["client_name"]).to eq("Test App")
+      expect(body["redirect_uris"]).to include("https://example.com/callback")
+      expect(body["grant_types"]).to include("authorization_code")
+    end
+
+    it "returns login page at /authorize with valid OAuth params" do
+      response = http_client.get(
+        "#{server_url}/authorize?response_type=code&client_id=test" \
+        "&redirect_uri=https://example.com/callback" \
+        "&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM" \
+        "&code_challenge_method=S256"
+      )
+
+      expect(response.status).to eq(200)
+      expect(response.content_type.mime_type).to eq("text/html")
+      expect(response.body.to_s).to include("Magi Archive")
+      expect(response.body.to_s).to include("Sign in")
+    end
+
+    it "returns error for /authorize with missing params" do
+      response = http_client.get("#{server_url}/authorize?response_type=code")
+
+      expect(response.status).to eq(400)
+
+      body = JSON.parse(response.body.to_s)
+      expect(body["error"]).to eq("invalid_request")
     end
 
     it "returns token for token endpoint" do
