@@ -107,13 +107,17 @@ class OAuthInstaller
     auth = Magi::Archive::Mcp::Auth.new(config)
 
     # Authenticate to verify credentials and discover role
-    auth.token
+    jwt_token = auth.token
     decko_username = auth.username
 
-    puts "  Authenticated as: #{decko_username || username}"
-    puts "  Role: #{config.role}"
+    # Extract actual role from JWT claims (Decko auto-determines max role)
+    claims = JWT.decode(jwt_token, nil, false)[0]
+    actual_role = claims["role"] || config.role
 
-    config.role
+    puts "  Authenticated as: #{decko_username || username}"
+    puts "  Role: #{actual_role}"
+
+    actual_role
   end
 
   def create_oauth_client(client_id, client_secret, username, password, role, platform_name)

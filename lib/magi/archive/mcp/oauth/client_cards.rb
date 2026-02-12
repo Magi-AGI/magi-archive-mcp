@@ -54,7 +54,7 @@ module Magi
             }
 
             card_name = "#{CARD_PREFIX}+#{client_id}"
-            @tools.create_card(card_name, content: JSON.generate(content), type: "Basic")
+            @tools.create_card(card_name, content: JSON.generate(content), type: "PlainText")
           end
 
           # Verify OAuth client credentials

@@ -20,7 +20,7 @@ RSpec.describe Magi::Archive::Mcp::OAuth::ClientCards do
     it "creates a card with hashed secret and encrypted password" do
       expect(tools_double).to receive(:create_card) do |name, content:, type:|
         expect(name).to eq("MCP OAuth Clients+#{client_id}")
-        expect(type).to eq("Basic")
+        expect(type).to eq("PlainText")
 
         data = JSON.parse(content)
         expect(data["username"]).to eq(username)
