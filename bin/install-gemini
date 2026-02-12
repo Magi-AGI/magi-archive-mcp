@@ -95,6 +95,9 @@ class GeminiInstaller
     puts "Note: If you haven't installed Gemini CLI yet, run:"
     puts "  npm install -g @anthropic/gemini-cli"
     puts "  (or see https://github.com/google-gemini/gemini-cli)"
+    puts ""
+    puts "For web/mobile access (Claude.ai, ChatGPT), use:"
+    puts "  ruby bin/install-oauth"
   end
 
   private
@@ -126,7 +129,7 @@ class GeminiInstaller
 
     {
       "MCP_USERNAME" => username,
-      "MCP_PASSWORD" => password
+      "MCP_PASS" => password
     }
   end
 

@@ -251,5 +251,9 @@ puts "Listening on #{HOST}:#{PORT}"
 puts "Working directory: #{working_directory}"
 puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
 
+# Note: OAuth is handled by RackApp (bin/mcp-server-rack-direct).
+# This Sinatra server is kept for backward compatibility but does not
+# support per-user OAuth auth. Use bin/mcp-server-rack-direct in production.
+
 # Start the Sinatra app (only if run directly, not via rackup)
 MagiArchiveMcpApp.run! if __FILE__ == $0

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-require 'json'
-require 'rack'
-require 'securerandom'
+require "json"
+require "rack"
+require "securerandom"
+require "uri"
 
 module Magi
   module Archive
@@ -10,12 +11,12 @@ module Magi
       # Simple host authorization middleware - only allows specific hosts
       class HostAuthorization
         ALLOWED_HOSTS = [
-          '127.0.0.1',
-          '127.0.0.1:3002',
-          'localhost',
-          'localhost:3002',
-          'mcp.magi-agi.org',
-          'magi-archive-mcp-proxy.lake-watkins.workers.dev'
+          "127.0.0.1",
+          "127.0.0.1:3002",
+          "localhost",
+          "localhost:3002",
+          "mcp.magi-agi.org",
+          "magi-archive-mcp-proxy.lake-watkins.workers.dev"
         ].freeze
 
         def initialize(app)
@@ -23,12 +24,12 @@ module Magi
         end
 
         def call(env)
-          host = env['HTTP_HOST'] || env['SERVER_NAME']
+          host = env["HTTP_HOST"] || env["SERVER_NAME"]
 
           if ALLOWED_HOSTS.include?(host)
             @app.call(env)
           else
-            [403, { 'Content-Type' => 'text/plain' }, ["Forbidden: Host '#{host}' not allowed"]]
+            [403, { "Content-Type" => "text/plain" }, ["Forbidden: Host '#{host}' not allowed"]]
           end
         end
       end
@@ -89,194 +90,525 @@ module Magi
       end
 
       # Pure Rack app without Sinatra - complete control over middleware
+      # rubocop:disable Metrics/ClassLength
       class RackApp
         class << self
-          attr_accessor :mcp_server_instance
+          attr_accessor :mcp_server_instance, :token_issuer, :credential_store, :client_cards, :rate_limiter
 
           def session_manager
             @session_manager ||= SessionManager.new
+          end
+
+          # Whether OAuth auth is required for MCP requests
+          def oauth_require_auth?
+            ENV.fetch("OAUTH_REQUIRE_AUTH", "false") == "true"
+          end
+
+          # OAuth issuer URL used in discovery documents
+          def oauth_issuer_url
+            ENV.fetch("OAUTH_ISSUER_URL", "https://mcp.magi-agi.org")
+          end
+
+          # Whether OAuth components are initialized
+          def oauth_enabled?
+            token_issuer && credential_store && client_cards
           end
         end
 
         # Add MCP protocol headers to response
         def add_mcp_headers(headers, session_id)
           headers.merge({
-            'MCP-Protocol-Version' => '2025-06-18',
-            'Mcp-Session-Id' => session_id
-          })
+                          "MCP-Protocol-Version" => "2025-06-18",
+                          "Mcp-Session-Id" => session_id
+                        })
         end
 
+        # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/AbcSize
         def call(env)
           request = Rack::Request.new(env)
 
           # Extract session ID from request or create new one
-          incoming_session_id = env['HTTP_MCP_SESSION_ID']
+          incoming_session_id = env["HTTP_MCP_SESSION_ID"]
           session_id = self.class.session_manager.get_or_create(incoming_session_id)
 
           case [request.request_method, request.path]
-          when ['GET', '/health']
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [200, headers, [JSON.generate({
-              status: 'healthy',
-              version: Magi::Archive::Mcp::VERSION,
-              timestamp: Time.now.iso8601
-            })]]
+          when ["GET", "/health"]
+            handle_health(session_id)
 
-          when ['GET', '/debug-headers']
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [200, headers, [JSON.generate({
-              http_host: env['HTTP_HOST'],
-              server_name: env['SERVER_NAME'],
-              server_port: env['SERVER_PORT'],
-              http_x_forwarded_host: env['HTTP_X_FORWARDED_HOST'],
-              http_mcp_session_id: env['HTTP_MCP_SESSION_ID'],
-              http_mcp_protocol_version: env['HTTP_MCP_PROTOCOL_VERSION'],
-              all_http_headers: env.select { |k,v| k.start_with?('HTTP_') }
-            })]]
+          when ["GET", "/debug-headers"]
+            handle_debug_headers(env, session_id)
 
-          when ['GET', '/sse'], ['GET', '/sse/']
-            # SSE endpoint - uses Rack hijack API for streaming
-            # Handle both /sse and /sse/ for compatibility with different MCP clients
-            headers = add_mcp_headers({
-              'Content-Type' => 'text/event-stream',
-              'Cache-Control' => 'no-cache',
-              'X-Accel-Buffering' => 'no' # Disable nginx buffering
-            }, session_id)
+          when ["GET", "/sse"], ["GET", "/sse/"]
+            handle_sse(session_id)
 
-            # Return async response with session_id for endpoint event
-            [200, headers, SSEStreamer.new(session_id)]
+          when ["GET", "/.well-known/oauth-protected-resource"]
+            handle_protected_resource_metadata(session_id)
 
-          when ['GET', '/.well-known/oauth-authorization-server']
-            # Minimal OAuth discovery for Claude.ai compatibility
-            # Returns valid structure but signals no actual auth required
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [200, headers, [JSON.generate({
-              issuer: 'https://mcp.magi-agi.org',
-              registration_endpoint: 'https://mcp.magi-agi.org/register',
-              token_endpoint: 'https://mcp.magi-agi.org/token',
-              grant_types_supported: ['client_credentials'],
-              response_types_supported: ['token'],
-              token_endpoint_auth_methods_supported: ['none']
-            })]]
+          when ["GET", "/.well-known/oauth-authorization-server"]
+            handle_authorization_server_metadata(session_id)
 
-          when ['POST', '/register']
-            # Dynamic Client Registration - return static public client
-            # This satisfies Claude's DCR requirement without enforcing auth
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [201, headers, [JSON.generate({
-              client_id: 'public-client',
-              client_id_issued_at: Time.now.to_i,
-              grant_types: ['client_credentials'],
-              token_endpoint_auth_method: 'none'
-            })]]
+          when ["POST", "/register"]
+            handle_register(request, session_id)
 
-          when ['POST', '/token']
-            # Token endpoint - return dummy token for authless flow
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [200, headers, [JSON.generate({
-              access_token: 'public-access',
-              token_type: 'Bearer',
-              expires_in: 31536000  # 1 year - effectively permanent for authless
-            })]]
+          when ["POST", "/token"]
+            handle_token(request, session_id)
 
-          when ['POST', '/'], ['POST', '/sse'], ['POST', '/sse/'], ['POST', '/message'], ['POST', '/messages']
-            # Handle MCP messages on multiple endpoints for compatibility:
-            # - /sse, /sse/ : Original endpoints
-            # - /message : Streamable HTTP style
-            # - /messages : Old SSE transport style (with session_id query param)
+          when ["POST", "/revoke"]
+            handle_revoke(request, session_id)
 
-            # For /messages endpoint, extract session_id from query param (old SSE transport)
-            if request.path == '/messages' || request.path.start_with?('/messages?')
-              query_session_id = request.params['session_id']
-              if query_session_id && self.class.session_manager.exists?(query_session_id)
-                session_id = query_session_id
-              elsif query_session_id
-                # Session ID provided but not found - return 404 per SSE spec
-                headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-                return [404, headers, [JSON.generate({
-                  jsonrpc: '2.0',
-                  id: nil,
-                  error: { code: -32001, message: 'Session not found', data: { session_id: query_session_id } }
-                })]]
-              end
-            end
+          when ["POST", "/"], ["POST", "/sse"], ["POST", "/sse/"], ["POST", "/message"], ["POST", "/messages"]
+            handle_mcp_message(request, env, session_id)
 
-            begin
-              body = request.body.read
-              request_data = JSON.parse(body, symbolize_names: true)
+          when ["DELETE", "/sse"], ["DELETE", "/sse/"]
+            handle_session_delete(incoming_session_id, session_id)
 
-              # Use the public handle method which properly initializes instrumentation
-              response = self.class.mcp_server_instance.handle(request_data)
-
-              headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-              # Return 202 Accepted for /messages (old SSE transport expects this)
-              status_code = (request.path == '/messages' || request.path.start_with?('/messages?')) ? 202 : 200
-              [status_code, headers, [JSON.generate(response)]]
-            rescue JSON::ParserError => e
-              error_response = {
-                jsonrpc: '2.0',
-                id: nil,
-                error: { code: -32700, message: 'Parse error', data: e.message }
-              }
-              headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-              [400, headers, [JSON.generate(error_response)]]
-            rescue StandardError => e
-              error_response = {
-                jsonrpc: '2.0',
-                id: request_data&.dig(:id),
-                error: { code: -32603, message: 'Internal error', data: e.message }
-              }
-              headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-              [500, headers, [JSON.generate(error_response)]]
-            end
-
-          when ['DELETE', '/sse'], ['DELETE', '/sse/']
-            # Session termination endpoint per MCP spec
-            if incoming_session_id
-              self.class.session_manager.delete(incoming_session_id)
-            end
-            headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-            [200, headers, [JSON.generate({ status: 'session closed' })]]
-
-          when ['GET', '/']
-            # Per MCP Streamable HTTP spec: check Accept header
-            # Return SSE stream if Accept: text/event-stream, else return JSON metadata
-            accept_header = env['HTTP_ACCEPT'] || ''
-
-            if accept_header.include?('text/event-stream')
-              # Return SSE stream for MCP clients with session_id for endpoint event
-              headers = add_mcp_headers({
-                'Content-Type' => 'text/event-stream',
-                'Cache-Control' => 'no-cache',
-                'X-Accel-Buffering' => 'no'
-              }, session_id)
-              [200, headers, SSEStreamer.new(session_id)]
-            else
-              # Return JSON metadata for browsers/discovery
-              headers = add_mcp_headers({ 'Content-Type' => 'application/json' }, session_id)
-              [200, headers, [JSON.generate({
-                name: 'magi-archive-mcp',
-                version: Magi::Archive::Mcp::VERSION,
-                protocol: 'mcp',
-                protocol_version: '2025-03-26',
-                transport: 'streamable-http',
-                transports_supported: ['streamable-http', 'sse'],
-                endpoints: {
-                  health: '/health',
-                  sse: '/sse',
-                  messages: '/messages',  # Old SSE transport (ChatGPT)
-                  message: '/message'     # Streamable HTTP
-                },
-                tools_count: self.class.mcp_server_instance.tools.length
-              })]]
-            end
+          when ["GET", "/"]
+            handle_root(env, session_id)
 
           else
-            headers = add_mcp_headers({ 'Content-Type' => 'text/plain' }, session_id)
-            [404, headers, ['Not Found']]
+            headers = add_mcp_headers({ "Content-Type" => "text/plain" }, session_id)
+            [404, headers, ["Not Found"]]
+          end
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/AbcSize
+
+        private
+
+        def handle_health(session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({
+                                          status: "healthy",
+                                          version: Magi::Archive::Mcp::VERSION,
+                                          timestamp: Time.now.iso8601
+                                        })]]
+        end
+
+        def handle_debug_headers(env, session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({
+                                          http_host: env["HTTP_HOST"],
+                                          server_name: env["SERVER_NAME"],
+                                          server_port: env["SERVER_PORT"],
+                                          http_x_forwarded_host: env["HTTP_X_FORWARDED_HOST"],
+                                          http_mcp_session_id: env["HTTP_MCP_SESSION_ID"],
+                                          http_mcp_protocol_version: env["HTTP_MCP_PROTOCOL_VERSION"],
+                                          all_http_headers: env.select { |k, _v| k.start_with?("HTTP_") }
+                                        })]]
+        end
+
+        def handle_sse(session_id)
+          headers = add_mcp_headers({
+                                      "Content-Type" => "text/event-stream",
+                                      "Cache-Control" => "no-cache",
+                                      "X-Accel-Buffering" => "no"
+                                    }, session_id)
+
+          [200, headers, SSEStreamer.new(session_id)]
+        end
+
+        # RFC 9728 - OAuth Protected Resource Metadata
+        def handle_protected_resource_metadata(session_id)
+          issuer_url = self.class.oauth_issuer_url
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({
+                                          resource: issuer_url,
+                                          authorization_servers: [issuer_url],
+                                          bearer_methods_supported: ["header"],
+                                          scopes_supported: ["mcp:read", "mcp:write", "mcp:admin"]
+                                        })]]
+        end
+
+        # RFC 8414 - OAuth Authorization Server Metadata
+        def handle_authorization_server_metadata(session_id)
+          issuer_url = self.class.oauth_issuer_url
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({
+                                          issuer: issuer_url,
+                                          token_endpoint: "#{issuer_url}/token",
+                                          revocation_endpoint: "#{issuer_url}/revoke",
+                                          registration_endpoint: "#{issuer_url}/register",
+                                          grant_types_supported: %w[client_credentials refresh_token],
+                                          token_endpoint_auth_methods_supported: ["client_secret_post"],
+                                          scopes_supported: ["mcp:read", "mcp:write", "mcp:admin"]
+                                        })]]
+        end
+
+        # Dynamic Client Registration (DCR)
+        def handle_register(request, session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          body = parse_request_body(request)
+
+          # Generate a client_id for DCR compatibility
+          # Actual credential creation happens via bin/install-oauth
+          client_id = SecureRandom.uuid
+          [201, headers, [JSON.generate({
+                                          client_id: client_id,
+                                          client_id_issued_at: Time.now.to_i,
+                                          client_name: body["client_name"] || "MCP Client",
+                                          grant_types: body["grant_types"] || ["client_credentials"],
+                                          token_endpoint_auth_method: "client_secret_post"
+                                        })]]
+        end
+
+        # OAuth Token Endpoint - core authentication
+        def handle_token(request, session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+
+          # Parse form-encoded or JSON body
+          params = parse_token_params(request)
+          grant_type = params["grant_type"]
+
+          case grant_type
+          when "client_credentials"
+            handle_client_credentials(params, headers, session_id)
+          when "refresh_token"
+            handle_refresh_token(params, headers, session_id)
+          else
+            # Fallback: if no OAuth components or no grant_type, return public token
+            # This preserves backward compatibility for clients that don't send credentials
+            unless self.class.oauth_enabled?
+              return [200, headers, [JSON.generate({
+                                                     access_token: "public-access",
+                                                     token_type: "Bearer",
+                                                     expires_in: 31_536_000
+                                                   })]]
+            end
+
+            [400, headers, [JSON.generate({
+                                            error: "unsupported_grant_type",
+                                            error_description: "Grant type '#{grant_type}' is not supported"
+                                          })]]
+          end
+        end
+
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        def handle_client_credentials(params, headers, _session_id)
+          client_id = params["client_id"]
+          client_secret = params["client_secret"]
+
+          unless self.class.oauth_enabled?
+            return [200, headers, [JSON.generate({
+                                                   access_token: "public-access",
+                                                   token_type: "Bearer",
+                                                   expires_in: 31_536_000
+                                                 })]]
+          end
+
+          # Rate limiting check
+          if self.class.rate_limiter&.rate_limited?(client_id)
+            return [429, headers, [JSON.generate({
+                                                   error: "rate_limit_exceeded",
+                                                   error_description: "Too many failed authentication attempts"
+                                                 })]]
+          end
+
+          unless client_id && client_secret
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_request",
+                                                   error_description: "client_id and client_secret are required"
+                                                 })]]
+          end
+
+          begin
+            # Verify credentials against Decko card
+            client_data = self.class.client_cards.verify_client(
+              client_id: client_id,
+              client_secret: client_secret
+            )
+
+            self.class.rate_limiter&.reset(client_id)
+
+            issue_token_response(client_data, headers)
+          rescue Magi::Archive::Mcp::OAuth::ClientCards::ClientError => e
+            self.class.rate_limiter&.record_failure(client_id)
+
+            [401, headers, [JSON.generate({
+                                            error: "invalid_client",
+                                            error_description: e.message
+                                          })]]
+          end
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        def handle_refresh_token(params, headers, _session_id)
+          refresh_token = params["refresh_token"]
+
+          unless self.class.oauth_enabled? && refresh_token
+            return [400, headers, [JSON.generate({
+                                                   error: "invalid_request",
+                                                   error_description: "refresh_token is required"
+                                                 })]]
+          end
+
+          token_data = self.class.credential_store.consume_refresh_token(refresh_token)
+          unless token_data
+            return [401, headers, [JSON.generate({
+                                                   error: "invalid_grant",
+                                                   error_description: "Refresh token is invalid or expired"
+                                                 })]]
+          end
+
+          # Re-issue tokens using stored credentials
+          issue_token_response(token_data, headers)
+        end
+
+        # RFC 7009 - Token Revocation
+        def handle_revoke(request, session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          params = parse_token_params(request)
+          token = params["token"]
+
+          self.class.credential_store.revoke_token(token) if token && self.class.oauth_enabled?
+
+          # Always return 200 per RFC 7009
+          [200, headers, [JSON.generate({ status: "revoked" })]]
+        end
+
+        # Handle MCP JSON-RPC messages with optional Bearer auth
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        def handle_mcp_message(request, env, session_id)
+          # For /messages endpoint, extract session_id from query param (old SSE transport)
+          if request.path == "/messages" || request.path.start_with?("/messages?")
+            query_session_id = request.params["session_id"]
+            if query_session_id && self.class.session_manager.exists?(query_session_id)
+              session_id = query_session_id
+            elsif query_session_id
+              headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+              return [404, headers, [JSON.generate({
+                                                     jsonrpc: "2.0",
+                                                     id: nil,
+                                                     error: { code: -32001, message: "Session not found",
+                                                              data: { session_id: query_session_id } }
+                                                   })]]
+            end
+          end
+
+          # Check Bearer token for per-user Tools
+          per_user_tools = resolve_bearer_token(env)
+
+          # If auth required but no valid token, reject
+          if self.class.oauth_require_auth? && per_user_tools.nil? && self.class.oauth_enabled?
+            issuer_url = self.class.oauth_issuer_url
+            headers = add_mcp_headers({
+                                        "Content-Type" => "application/json",
+                                        "WWW-Authenticate" => "Bearer resource_metadata=" \
+                                                              "\"#{issuer_url}/.well-known/oauth-protected-resource\""
+                                      }, session_id)
+            return [401, headers, [JSON.generate({
+                                                   jsonrpc: "2.0",
+                                                   id: nil,
+                                                   error: { code: -32001, message: "Authentication required" }
+                                                 })]]
+          end
+
+          begin
+            body = request.body.read
+            request_data = JSON.parse(body, symbolize_names: true)
+
+            response = if per_user_tools
+                         handle_with_user_tools(request_data, per_user_tools)
+                       else
+                         self.class.mcp_server_instance.handle(request_data)
+                       end
+
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            status_code = request.path == "/messages" || request.path.start_with?("/messages?") ? 202 : 200
+            [status_code, headers, [JSON.generate(response)]]
+          rescue JSON::ParserError => e
+            error_response = {
+              jsonrpc: "2.0",
+              id: nil,
+              error: { code: -32700, message: "Parse error", data: e.message }
+            }
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            [400, headers, [JSON.generate(error_response)]]
+          rescue StandardError => e
+            error_response = {
+              jsonrpc: "2.0",
+              id: request_data&.dig(:id),
+              error: { code: -32603, message: "Internal error", data: e.message }
+            }
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            [500, headers, [JSON.generate(error_response)]]
+          end
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        def handle_session_delete(incoming_session_id, session_id)
+          self.class.session_manager.delete(incoming_session_id) if incoming_session_id
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({ status: "session closed" })]]
+        end
+
+        # rubocop:disable Metrics/MethodLength
+        def handle_root(env, session_id)
+          accept_header = env["HTTP_ACCEPT"] || ""
+
+          if accept_header.include?("text/event-stream")
+            headers = add_mcp_headers({
+                                        "Content-Type" => "text/event-stream",
+                                        "Cache-Control" => "no-cache",
+                                        "X-Accel-Buffering" => "no"
+                                      }, session_id)
+            [200, headers, SSEStreamer.new(session_id)]
+          else
+            headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+            [200, headers, [JSON.generate({
+                                            name: "magi-archive-mcp",
+                                            version: Magi::Archive::Mcp::VERSION,
+                                            protocol: "mcp",
+                                            protocol_version: "2025-03-26",
+                                            transport: "streamable-http",
+                                            transports_supported: %w[streamable-http sse],
+                                            endpoints: {
+                                              health: "/health",
+                                              sse: "/sse",
+                                              messages: "/messages",
+                                              message: "/message"
+                                            },
+                                            tools_count: self.class.mcp_server_instance.tools.length
+                                          })]]
+          end
+        end
+        # rubocop:enable Metrics/MethodLength
+
+        # --- Helper methods ---
+
+        # Parse request body as JSON (with fallback for empty body)
+        def parse_request_body(request)
+          body = request.body.read
+          return {} if body.nil? || body.empty?
+
+          JSON.parse(body)
+        rescue JSON::ParserError
+          {}
+        end
+
+        # Parse token endpoint params from form-encoded or JSON body
+        def parse_token_params(request)
+          content_type = request.content_type || ""
+
+          if content_type.include?("application/x-www-form-urlencoded")
+            # Standard OAuth form encoding
+            request.params
+          else
+            # JSON body (also common with MCP clients)
+            parse_request_body(request)
+          end
+        end
+
+        # Issue a new token pair and cache the Tools instance
+        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+        def issue_token_response(client_data, headers)
+          new_session_id = SecureRandom.uuid
+          username = client_data[:username]
+          password = client_data[:password]
+          role = client_data[:role]
+
+          # Issue access token
+          access_token = self.class.token_issuer.issue(
+            sub: username,
+            role: role,
+            session_id: new_session_id
+          )
+
+          # Issue refresh token
+          refresh_token = SecureRandom.uuid
+          self.class.credential_store.store_refresh_token(
+            refresh_token,
+            session_id: new_session_id,
+            username: username,
+            password: password,
+            role: role
+          )
+
+          # Create per-user Tools instance and cache it
+          tools = create_user_tools(username, password, role)
+          self.class.credential_store.store_session(
+            new_session_id,
+            username: username,
+            role: role,
+            tools: tools
+          )
+
+          # Map role to scope
+          scope = case role
+                  when "admin" then "mcp:admin"
+                  when "gm" then "mcp:write"
+                  else "mcp:read"
+                  end
+
+          [200, headers, [JSON.generate({
+                                          access_token: access_token,
+                                          token_type: "Bearer",
+                                          expires_in: self.class.token_issuer.ttl,
+                                          refresh_token: refresh_token,
+                                          scope: scope
+                                        })]]
+        end
+        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize
+
+        # Create a Tools instance for a specific user
+        def create_user_tools(username, password, role)
+          # Set up per-user env vars temporarily for Config
+          original_env = {
+            "MCP_USERNAME" => ENV.fetch("MCP_USERNAME", nil),
+            "MCP_PASSWORD" => ENV.fetch("MCP_PASSWORD", nil),
+            "MCP_ROLE" => ENV.fetch("MCP_ROLE", nil)
+          }
+
+          ENV["MCP_USERNAME"] = username
+          ENV["MCP_PASSWORD"] = password
+          ENV["MCP_ROLE"] = role
+
+          Magi::Archive::Mcp::Tools.new
+        ensure
+          # Restore original env
+          original_env.each do |key, val|
+            if val
+              ENV[key] = val
+            else
+              ENV.delete(key)
+            end
+          end
+        end
+
+        # Extract and verify Bearer token, return per-user Tools or nil
+        def resolve_bearer_token(env)
+          return nil unless self.class.oauth_enabled?
+
+          auth_header = env["HTTP_AUTHORIZATION"]
+          return nil unless auth_header&.start_with?("Bearer ")
+
+          token = auth_header[7..]
+          return nil if token == "public-access" # Skip legacy public token
+
+          begin
+            claims = self.class.token_issuer.verify(token)
+            session = self.class.credential_store.get_session(claims["jti"])
+            session&.dig(:tools)
+          rescue Magi::Archive::Mcp::OAuth::TokenIssuer::TokenError
+            nil
+          end
+        end
+
+        # Handle MCP request with per-user Tools (thread-safe context swap)
+        def handle_with_user_tools(request_data, per_user_tools)
+          mcp_server = self.class.mcp_server_instance
+
+          # Thread-safe: swap server_context for this request
+          @request_mutex ||= Mutex.new
+          @request_mutex.synchronize do
+            original_context = mcp_server.server_context
+            working_dir = original_context&.dig(:working_directory) || Dir.pwd
+            mcp_server.server_context = { magi_tools: per_user_tools, working_directory: working_dir }
+            response = mcp_server.handle(request_data)
+            mcp_server.server_context = original_context
+            response
           end
         end
       end
+      # rubocop:enable Metrics/ClassLength
     end
   end
 end
