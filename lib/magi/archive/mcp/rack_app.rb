@@ -519,28 +519,12 @@ module Magi
             end
           end
 
-          # Check Bearer token for per-user Tools
-          per_user_tools = resolve_bearer_token(env)
-
-          # If auth required but no valid token, reject
-          if self.class.oauth_require_auth? && per_user_tools.nil? && self.class.oauth_enabled?
-            issuer_url = self.class.oauth_issuer_url
-            headers = add_mcp_headers({
-                                        "Content-Type" => "application/json",
-                                        "WWW-Authenticate" => "Bearer resource_metadata=" \
-                                                              "\"#{issuer_url}/.well-known/oauth-protected-resource\""
-                                      }, session_id)
-            return [401, headers, [JSON.generate({
-                                                   jsonrpc: "2.0",
-                                                   id: nil,
-                                                   error: { code: -32001, message: "Authentication required" }
-                                                 })]]
-          end
-
           begin
             body = request.body.read
 
-            # Handle empty POST body gracefully (ChatGPT sends empty POST as probe)
+            # Handle empty POST body BEFORE auth check — ChatGPT sends empty POST
+            # as a connectivity probe before it has a token. Returning 401 here
+            # causes ChatGPT to abort the MCP connection entirely.
             if body.nil? || body.strip.empty?
               accept = env["HTTP_ACCEPT"] || ""
               if accept.include?("text/event-stream")
@@ -561,6 +545,24 @@ module Magi
                                                         }
                                                       }
                                                     })]]
+            end
+
+            # Check Bearer token for per-user Tools
+            per_user_tools = resolve_bearer_token(env)
+
+            # If auth required but no valid token, reject
+            if self.class.oauth_require_auth? && per_user_tools.nil? && self.class.oauth_enabled?
+              issuer_url = self.class.oauth_issuer_url
+              headers = add_mcp_headers({
+                                          "Content-Type" => "application/json",
+                                          "WWW-Authenticate" => "Bearer resource_metadata=" \
+                                                                "\"#{issuer_url}/.well-known/oauth-protected-resource\""
+                                        }, session_id)
+              return [401, headers, [JSON.generate({
+                                                     jsonrpc: "2.0",
+                                                     id: nil,
+                                                     error: { code: -32001, message: "Authentication required" }
+                                                   })]]
             end
 
             request_data = JSON.parse(body, symbolize_names: true)
