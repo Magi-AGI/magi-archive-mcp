@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "base64"
 require "json"
 require "rack"
 require "securerandom"
@@ -95,14 +96,16 @@ module Magi
         end
 
         def each
-          # Send initial endpoint event with session_id in URL
-          # This is the OLD SSE transport format that ChatGPT expects
+          # Send keepalive comment IMMEDIATELY as first byte to prevent client timeout.
+          # ChatGPT's openai-mcp client has a very short timeout on SSE GET connections;
+          # delivering the first byte quickly prevents 499 (client closed request).
+          yield ": connected\n\n"
+
+          # Send endpoint event for backward compatibility with old SSE transport
           # Format: /messages?session_id={uuid}
-          yield "event: endpoint\n"
-          yield "data: /messages?session_id=#{@session_id}\n\n"
+          yield "event: endpoint\ndata: /messages?session_id=#{@session_id}\n\n"
 
           # Keep connection alive with periodic keepalive messages
-          # MCP SSE spec recommends 15 second intervals
           begin
             loop do
               sleep 15
@@ -193,6 +196,12 @@ module Magi
 
           when ["GET", "/.well-known/oauth-authorization-server"]
             handle_authorization_server_metadata(session_id)
+
+          when ["GET", "/.well-known/openid-configuration"]
+            handle_openid_configuration(session_id)
+
+          when ["GET", "/jwks"], ["GET", "/jwks.json"], ["GET", "/.well-known/jwks.json"]
+            handle_jwks(session_id)
 
           when ["GET", "/authorize"]
             handle_authorize_get(request, session_id)
@@ -299,6 +308,43 @@ module Magi
                                           token_endpoint_auth_methods_supported: %w[client_secret_post none],
                                           scopes_supported: ["mcp:read", "mcp:write", "mcp:admin"]
                                         })]]
+        end
+
+        # OpenID Connect Discovery 1.0 (for ChatGPT and other OIDC-aware clients)
+        # rubocop:disable Metrics/MethodLength
+        def handle_openid_configuration(session_id)
+          issuer_url = self.class.oauth_issuer_url
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+          [200, headers, [JSON.generate({
+                                          issuer: issuer_url,
+                                          authorization_endpoint: "#{issuer_url}/authorize",
+                                          token_endpoint: "#{issuer_url}/token",
+                                          revocation_endpoint: "#{issuer_url}/revoke",
+                                          registration_endpoint: "#{issuer_url}/register",
+                                          jwks_uri: "#{issuer_url}/jwks",
+                                          response_types_supported: ["code"],
+                                          code_challenge_methods_supported: ["S256"],
+                                          grant_types_supported:
+                                            %w[authorization_code refresh_token client_credentials],
+                                          token_endpoint_auth_methods_supported: %w[client_secret_post none],
+                                          scopes_supported: ["mcp:read", "mcp:write", "mcp:admin"],
+                                          subject_types_supported: ["public"],
+                                          id_token_signing_alg_values_supported: ["RS256"]
+                                        })]]
+        end
+        # rubocop:enable Metrics/MethodLength
+
+        # JWKS endpoint - exposes public signing key for token verification
+        def handle_jwks(session_id)
+          headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+
+          if self.class.token_issuer
+            pub_key = self.class.token_issuer.public_key
+            jwk = build_jwk(pub_key)
+            [200, headers, [JSON.generate({ keys: [jwk] })]]
+          else
+            [200, headers, [JSON.generate({ keys: [] })]]
+          end
         end
 
         # Dynamic Client Registration (RFC 7591)
@@ -493,6 +539,30 @@ module Magi
 
           begin
             body = request.body.read
+
+            # Handle empty POST body gracefully (ChatGPT sends empty POST as probe)
+            if body.nil? || body.strip.empty?
+              accept = env["HTTP_ACCEPT"] || ""
+              if accept.include?("text/event-stream")
+                # Client wants SSE notification channel — return SSE stream
+                return handle_sse(session_id)
+              end
+
+              # Return server info for empty POST probe
+              headers = add_mcp_headers({ "Content-Type" => "application/json" }, session_id)
+              return [200, headers, [JSON.generate({
+                                                      jsonrpc: "2.0",
+                                                      id: nil,
+                                                      result: {
+                                                        protocolVersion: "2025-06-18",
+                                                        serverInfo: {
+                                                          name: "magi-archive",
+                                                          version: Magi::Archive::Mcp::VERSION
+                                                        }
+                                                      }
+                                                    })]]
+            end
+
             request_data = JSON.parse(body, symbolize_names: true)
 
             response = if per_user_tools
@@ -761,11 +831,14 @@ module Magi
         def authenticate_with_decko(email, password)
           return nil if blank?(email) || blank?(password)
 
+          # Use default role so Config omits it from the auth payload,
+          # letting Decko auto-detect the user's highest role.
           tools = create_user_tools(email, password, "user")
-          # Force token fetch to actually validate credentials against Decko
+          # Force token fetch to validate credentials against Decko
           tools.client.auth.token
-          config = tools.client.config
-          config.respond_to?(:role) && config.role ? config.role : "user"
+          # Read the role that Decko actually assigned (from the auth response),
+          # not the role we requested.
+          tools.client.auth.resolved_role || "user"
         rescue StandardError
           nil
         end
@@ -906,6 +979,28 @@ module Magi
           rescue Magi::Archive::Mcp::OAuth::TokenIssuer::TokenError
             nil
           end
+        end
+
+        # Build a JWK (JSON Web Key) from an RSA public key
+        def build_jwk(pub_key)
+          key_data = pub_key.public_key
+          n = key_data.n
+          e = key_data.e
+          kid = OpenSSL::Digest::SHA256.hexdigest(key_data.to_der)[0..15]
+
+          {
+            kty: "RSA",
+            use: "sig",
+            alg: "RS256",
+            kid: kid,
+            n: base64url_encode(n.to_s(2)),
+            e: base64url_encode(e.to_s(2))
+          }
+        end
+
+        # Base64url encode without padding (per RFC 7515)
+        def base64url_encode(data)
+          Base64.urlsafe_encode64(data, padding: false)
         end
 
         # Handle MCP request with per-user Tools (thread-safe context swap)
