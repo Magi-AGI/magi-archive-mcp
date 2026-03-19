@@ -21,7 +21,7 @@ module Magi
       #
       # Method 2: API Key
       # - MCP_API_KEY: API key for authentication with Decko
-      # - MCP_ROLE: Required role scope (user/gm/admin)
+      # - MCP_ROLE: Required role scope (as defined in Decko)
       #
       # Common optional variables:
       # - DECKO_API_BASE_URL: Base URL for Decko API (default: https://wiki.magi-agi.org/api/mcp)
@@ -40,9 +40,6 @@ module Magi
       class Config
         # Configuration error raised when required settings are missing
         class ConfigurationError < StandardError; end
-
-        # Valid role values
-        VALID_ROLES = %w[user gm admin].freeze
 
         # Valid authentication methods
         VALID_AUTH_METHODS = %i[username api_key].freeze
@@ -121,8 +118,10 @@ module Magi
 
         def load_configuration
           # Load credentials
+          # MCP_PASS is an alias for MCP_PASSWORD to work around clients
+          # that redact env vars matching *PASSWORD* patterns (e.g., Gemini CLI)
           @username = ENV.fetch("MCP_USERNAME", nil)
-          @password = ENV.fetch("MCP_PASSWORD", nil)
+          @password = ENV.fetch("MCP_PASSWORD", nil) || ENV.fetch("MCP_PASS", nil)
           @api_key = ENV.fetch("MCP_API_KEY", nil)
 
           # Load common settings
@@ -172,12 +171,6 @@ module Magi
             if role.nil? || role.empty?
               raise ConfigurationError, "MCP_ROLE is required when using API key authentication"
             end
-          end
-
-          # Validate role if provided
-          if role && !VALID_ROLES.include?(role)
-            raise ConfigurationError,
-                  "MCP_ROLE must be one of: #{VALID_ROLES.join(", ")} (got: #{role})"
           end
         end
       end
