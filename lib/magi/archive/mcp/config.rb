@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
-require "dotenv/load"
+require "dotenv"
+
+# Load .env from the gem root, not the process CWD.
+# When MCP clients (Cursor, Claude Desktop, etc.) spawn the server,
+# the CWD is typically NOT the project directory, so dotenv/load
+# (which searches CWD) would silently fail to find the .env file.
+_gem_root = File.expand_path("../../../../..", __FILE__)
+Dotenv.load(File.join(_gem_root, ".env"))
 
 module Magi
   module Archive
@@ -149,8 +156,12 @@ module Magi
         def validate_configuration
           # Validate auth method
           unless auth_method
+            env_file = File.join(File.expand_path("../../../../..", __FILE__), ".env")
+            env_hint = File.exist?(env_file) ? "Found .env at #{env_file} but it lacks credentials" : "No .env file at #{env_file}"
             raise ConfigurationError,
-                  "Must provide either (MCP_USERNAME + MCP_PASSWORD) or MCP_API_KEY"
+                  "Must provide either (MCP_USERNAME + MCP_PASSWORD) or MCP_API_KEY. " \
+                  "Set these in your MCP client's env config or in the project .env file. " \
+                  "(#{env_hint})"
           end
 
           # Validate credentials for chosen method
