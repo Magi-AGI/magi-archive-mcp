@@ -12,6 +12,7 @@ require "fileutils"
 class CursorInstaller
   def initialize
     @server_path = File.expand_path("../mcp-server", __FILE__)
+    @launcher_path = File.expand_path("../mcp-server-launcher", __FILE__)
     @gem_root = File.expand_path("../..", @server_path)
   end
 
@@ -26,8 +27,9 @@ class CursorInstaller
       exit 1
     end
 
-    # Make server executable
+    # Make server and launcher executable
     FileUtils.chmod(0o755, @server_path)
+    FileUtils.chmod(0o755, @launcher_path) if File.exist?(@launcher_path)
 
     # Check dependencies are installed
     Dir.chdir(@gem_root) do
@@ -77,17 +79,28 @@ class CursorInstaller
              end
 
     # Add Magi Archive server config
+    # Use launcher script on Unix to handle rbenv/rvm/asdf PATH issues
+    # when MCP clients spawn the server as a subprocess without a login shell
     config["mcpServers"] ||= {}
-    config["mcpServers"]["magi-archive"] = {
-      "command" => "ruby",
-      "args" => [@server_path, working_dir],
-      "env" => env_vars.merge(
-        {
-          "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp",
-          "BUNDLE_GEMFILE" => File.join(@gem_root, "Gemfile")
-        }
-      )
-    }
+    config["mcpServers"]["magi-archive"] = if windows?
+                                              {
+                                                "command" => "ruby",
+                                                "args" => [@server_path, working_dir],
+                                                "env" => env_vars.merge({
+                                                  "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp",
+                                                  "BUNDLE_GEMFILE" => File.join(@gem_root, "Gemfile")
+                                                })
+                                              }
+                                            else
+                                              {
+                                                "command" => @launcher_path,
+                                                "args" => [working_dir],
+                                                "env" => env_vars.merge({
+                                                  "DECKO_API_BASE_URL" => "https://wiki.magi-agi.org/api/mcp",
+                                                  "BUNDLE_GEMFILE" => File.join(@gem_root, "Gemfile")
+                                                })
+                                              }
+                                            end
 
     # Save config
     File.write(config_path, JSON.pretty_generate(config))
@@ -152,6 +165,10 @@ class CursorInstaller
       "MCP_API_KEY" => api_key,
       "MCP_ROLE" => role
     }
+  end
+
+  def windows?
+    RbConfig::CONFIG["host_os"] =~ /mswin|msys|mingw|cygwin|bccwin|wince|emc/i
   end
 end
 

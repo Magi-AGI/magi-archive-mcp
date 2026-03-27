@@ -11,6 +11,7 @@ require "fileutils"
 class CodexInstaller
   def initialize
     @server_path = File.expand_path("../mcp-server", __FILE__)
+    @launcher_path = File.expand_path("../mcp-server-launcher", __FILE__)
     @gem_root = File.expand_path("../..", @server_path)
   end
 
@@ -25,8 +26,9 @@ class CodexInstaller
       exit 1
     end
 
-    # Make server executable
+    # Make server and launcher executable
     FileUtils.chmod(0755, @server_path)
+    FileUtils.chmod(0755, @launcher_path) if File.exist?(@launcher_path)
 
     # Check dependencies are installed
     Dir.chdir(@gem_root) do
@@ -112,13 +114,22 @@ class CodexInstaller
     env_flags << "BUNDLE_GEMFILE=#{File.join(@gem_root, 'Gemfile')}"
 
     # Build full command
+    # Use launcher script on Unix to handle rbenv/rvm/asdf PATH issues
+    # when MCP clients spawn the server as a subprocess without a login shell
+    server_cmd = if windows?
+                   ["bundle", "exec", "ruby", @server_path]
+                 elsif File.exist?(@launcher_path)
+                   [@launcher_path]
+                 else
+                   ["bundle", "exec", "ruby", @server_path]
+                 end
+
     cmd = [
       "codex", "mcp", "add",
       "magi-archive",
       *env_flags,
       "--",
-      "bundle", "exec", "ruby",
-      @server_path,
+      *server_cmd,
       working_dir
     ]
 
@@ -183,6 +194,10 @@ class CodexInstaller
       "MCP_API_KEY" => api_key,
       "MCP_ROLE" => role
     }
+  end
+
+  def windows?
+    RbConfig::CONFIG["host_os"] =~ /mswin|msys|mingw|cygwin|bccwin|wince|emc/i
   end
 end
 
