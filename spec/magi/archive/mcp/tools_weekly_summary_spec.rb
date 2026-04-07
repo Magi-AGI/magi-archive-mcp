@@ -133,12 +133,37 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
           }
         end
 
-      # Should stop after 100 pages and log warning
-      expect { result = tools.get_recent_changes }.to output(/Pagination safety limit reached/).to_stderr
+      # With default max_cards: 5000 and limit: 100, max_loops = 51
+      # But each page only has 1 card, so it hits the loop limit at 51 pages
+      expect { tools.get_recent_changes }.to output(/Pagination safety limit reached/).to_stderr
 
       # Verify it stopped and returned partial results
       result = tools.get_recent_changes
-      expect(result.size).to eq(100) # 100 pages with 1 card each
+      expect(result.size).to eq(51) # 51 pages (max_loops) with 1 card each
+    end
+
+    it "caps total cards fetched at max_cards" do
+      stub_request(:get, "#{base_url}/cards")
+        .with(query: hash_including({}))
+        .to_return do |request|
+          offset = request.uri.query_values["offset"].to_i
+          limit = request.uri.query_values["limit"].to_i
+          cards = (0...limit).map do |i|
+            { "name" => "Card #{offset + i}", "updated_at" => "2025-12-03T10:00:00Z" }
+          end
+          {
+            status: 200,
+            body: {
+              cards: cards,
+              total: 10000,
+              offset: offset,
+              next_offset: offset + limit
+            }.to_json
+          }
+        end
+
+      result = tools.get_recent_changes(max_cards: 250)
+      expect(result.size).to eq(250)
     end
   end
 
@@ -448,7 +473,7 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "supports custom lookback period" do
-      expect(tools).to receive(:get_recent_changes).with(days: 14)
+      expect(tools).to receive(:get_recent_changes).with(days: 14, max_cards: 500)
 
       # Stub TOC operations
       stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")

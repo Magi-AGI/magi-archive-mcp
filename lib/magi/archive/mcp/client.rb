@@ -406,10 +406,12 @@ module Magi
         def ssl_context
           return nil unless config.ssl_verify_mode == :none
 
-          require "openssl"
-          ctx = OpenSSL::SSL::SSLContext.new
-          ctx.verify_mode = OpenSSL::SSL::VERIFY_NONE
-          ctx
+          @ssl_context ||= begin
+            require "openssl"
+            ctx = OpenSSL::SSL::SSLContext.new
+            ctx.verify_mode = OpenSSL::SSL::VERIFY_NONE
+            ctx
+          end
         end
       end
     end
