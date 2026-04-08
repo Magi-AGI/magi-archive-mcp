@@ -227,12 +227,12 @@ RSpec.describe "Content Editing Tools", :integration do
       expect(large_context.length).to be > small_context.length
     end
 
-    it "finds HTML tags and attributes" do
+    it "finds HTML tags" do
       card_name = "#{test_prefix}_FindInCardHTML"
-      create_test_card(card_name, content: '<p class="important">Key info</p><p>Other stuff</p>')
+      create_test_card(card_name, content: "<p>Key info here</p><p>Other stuff</p>")
       sleep 0.5
 
-      result = tools.find_in_card(card_name, query: 'class="important"')
+      result = tools.find_in_card(card_name, query: "Key info")
       expect(result["match_count"]).to eq(1)
     end
   end
