@@ -29,8 +29,7 @@ module Magi
                   minimum: 1,
                   maximum: 500
                 }
-              },
-              required: []
+              }
             )
 
             class << self

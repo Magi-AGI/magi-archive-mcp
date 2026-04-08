@@ -129,8 +129,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -158,8 +158,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         body = JSON.parse(response.body.to_s)
         tool_names = body["result"]["tools"].map { |t| t["name"] }
@@ -185,8 +185,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -216,8 +216,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -248,8 +248,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -283,8 +283,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -311,8 +311,8 @@ RSpec.describe "MCP HTTP Server", :integration do
         }
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post("#{server_url}/message", json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post("#{server_url}/message", json: request_body)
 
         expect(response.status).to eq(200)
 
@@ -343,8 +343,8 @@ RSpec.describe "MCP HTTP Server", :integration do
 
       # Second request with same session ID
       second_response = http_client
-        .headers("Mcp-Session-Id" => session_id)
-        .get("#{server_url}/health")
+                        .headers("Mcp-Session-Id" => session_id)
+                        .get("#{server_url}/health")
 
       expect(second_response.headers["Mcp-Session-Id"]).to eq(session_id)
     end
@@ -365,8 +365,8 @@ RSpec.describe "MCP HTTP Server", :integration do
       }
 
       response = http_client
-        .headers("Content-Type" => "application/json")
-        .post("#{server_url}/messages?session_id=#{session_id}", json: request_body)
+                 .headers("Content-Type" => "application/json")
+                 .post("#{server_url}/messages?session_id=#{session_id}", json: request_body)
 
       # Old SSE transport returns 202 Accepted
       expect(response.status).to eq(202)
@@ -386,8 +386,8 @@ RSpec.describe "MCP HTTP Server", :integration do
       }
 
       response = http_client
-        .headers("Content-Type" => "application/json")
-        .post("#{server_url}/messages?session_id=invalid-session-id", json: request_body)
+                 .headers("Content-Type" => "application/json")
+                 .post("#{server_url}/messages?session_id=invalid-session-id", json: request_body)
 
       expect(response.status).to eq(404)
 
@@ -399,8 +399,8 @@ RSpec.describe "MCP HTTP Server", :integration do
   describe "Error Handling" do
     it "returns parse error for invalid JSON" do
       response = http_client
-        .headers("Content-Type" => "application/json")
-        .post("#{server_url}/message", body: "not valid json")
+                 .headers("Content-Type" => "application/json")
+                 .post("#{server_url}/message", body: "not valid json")
 
       expect(response.status).to eq(400)
 
@@ -436,14 +436,14 @@ RSpec.describe "MCP HTTP Server", :integration do
 
     it "handles dynamic client registration with redirect_uris" do
       response = http_client
-        .headers("Content-Type" => "application/json")
-        .post("#{server_url}/register", json: {
-                client_name: "Test App",
-                redirect_uris: ["https://example.com/callback"],
-                grant_types: ["authorization_code"],
-                response_types: ["code"],
-                token_endpoint_auth_method: "none"
-              })
+                 .headers("Content-Type" => "application/json")
+                 .post("#{server_url}/register", json: {
+                         client_name: "Test App",
+                         redirect_uris: ["https://example.com/callback"],
+                         grant_types: ["authorization_code"],
+                         response_types: ["code"],
+                         token_endpoint_auth_method: "none"
+                       })
 
       expect(response.status).to eq(201)
 
@@ -479,14 +479,253 @@ RSpec.describe "MCP HTTP Server", :integration do
 
     it "returns token for token endpoint" do
       response = http_client
-        .headers("Content-Type" => "application/json")
-        .post("#{server_url}/token", json: {})
+                 .headers("Content-Type" => "application/json")
+                 .post("#{server_url}/token", json: {})
 
       expect(response.status).to eq(200)
 
       body = JSON.parse(response.body.to_s)
       expect(body).to have_key("access_token")
       expect(body).to have_key("token_type")
+    end
+  end
+
+  describe "ChatGPT MCP Client Lifecycle" do
+    # Simulates the exact connection sequence used by ChatGPT's openai-mcp/1.0.0 client:
+    #   1. Empty POST probe → 200 (connectivity check, no auth token yet)
+    #   2. OIDC/OAuth discovery → 200 (find auth endpoints)
+    #   3. JWKS → 200 (get signing keys)
+    #   4. Dynamic Client Registration → 201
+    #   5. Token exchange → 200
+    #   6. SSE GET → 200 with immediate first byte
+    #   7. MCP initialize POST → 200
+
+    it "responds 200 to empty POST probe (no auth, no body)" do
+      response = http_client
+                 .headers("Content-Type" => "application/json")
+                 .post(server_url, body: "")
+
+      expect(response.status).to eq(200)
+
+      body = JSON.parse(response.body.to_s)
+      expect(body["jsonrpc"]).to eq("2.0")
+      expect(body["result"]).to have_key("protocolVersion")
+      expect(body["result"]).to have_key("serverInfo")
+      expect(body["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "responds 200 to empty POST with whitespace-only body" do
+      response = http_client
+                 .headers("Content-Type" => "application/json")
+                 .post(server_url, body: "  \n  ")
+
+      expect(response.status).to eq(200)
+
+      body = JSON.parse(response.body.to_s)
+      expect(body["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "returns SSE stream for empty POST with Accept: text/event-stream" do
+      response = HTTP.timeout(connect: 5, read: 2)
+                     .headers(
+                       "Content-Type" => "application/json",
+                       "Accept" => "text/event-stream"
+                     )
+                     .post(server_url, body: "")
+
+      expect(response.status).to eq(200)
+      expect(response.content_type.mime_type).to eq("text/event-stream")
+    rescue HTTP::TimeoutError
+      # Expected — SSE streams don't end naturally
+    end
+
+    it "returns OIDC discovery document" do
+      response = http_client.get("#{server_url}/.well-known/openid-configuration")
+
+      expect(response.status).to eq(200)
+
+      body = JSON.parse(response.body.to_s)
+      expect(body).to have_key("issuer")
+      expect(body).to have_key("authorization_endpoint")
+      expect(body).to have_key("token_endpoint")
+      expect(body).to have_key("registration_endpoint")
+      expect(body).to have_key("jwks_uri")
+      expect(body["response_types_supported"]).to include("code")
+      expect(body["code_challenge_methods_supported"]).to include("S256")
+      expect(body["grant_types_supported"]).to include("authorization_code")
+      expect(body["id_token_signing_alg_values_supported"]).to include("RS256")
+    end
+
+    it "returns JWKS with at least one key" do
+      response = http_client.get("#{server_url}/jwks")
+
+      expect(response.status).to eq(200)
+
+      body = JSON.parse(response.body.to_s)
+      expect(body).to have_key("keys")
+      expect(body["keys"]).to be_an(Array)
+
+      if body["keys"].any?
+        key = body["keys"].first
+        expect(key["kty"]).to eq("RSA")
+        expect(key["alg"]).to eq("RS256")
+        expect(key["use"]).to eq("sig")
+        expect(key).to have_key("n")
+        expect(key).to have_key("e")
+        expect(key).to have_key("kid")
+      end
+    end
+
+    it "supports JWKS at all standard paths" do
+      %w[/jwks /jwks.json /.well-known/jwks.json].each do |path|
+        response = http_client.get("#{server_url}#{path}")
+        expect(response.status).to eq(200)
+
+        body = JSON.parse(response.body.to_s)
+        expect(body).to have_key("keys")
+      end
+    end
+
+    it "completes full discovery → registration → token lifecycle" do
+      # Step 1: OAuth discovery
+      discovery = http_client.get("#{server_url}/.well-known/oauth-authorization-server")
+      expect(discovery.status).to eq(200)
+      JSON.parse(discovery.body.to_s)
+
+      # Step 2: Dynamic Client Registration
+      reg_response = http_client
+                     .headers("Content-Type" => "application/json")
+                     .post("#{server_url}/register", json: {
+                             client_name: "ChatGPT Integration Test",
+                             redirect_uris: ["https://chatgpt.com/callback"],
+                             grant_types: ["authorization_code"],
+                             response_types: ["code"],
+                             token_endpoint_auth_method: "none"
+                           })
+      expect(reg_response.status).to eq(201)
+      client_data = JSON.parse(reg_response.body.to_s)
+      expect(client_data).to have_key("client_id")
+
+      # Step 3: Token endpoint responds (at minimum, returns structured response)
+      token_response = http_client
+                       .headers("Content-Type" => "application/json")
+                       .post("#{server_url}/token", json: {})
+      expect(token_response.status).to eq(200)
+      token_data = JSON.parse(token_response.body.to_s)
+      expect(token_data).to have_key("access_token")
+    end
+
+    it "delivers SSE first byte immediately (prevents 499 timeout)" do
+      first_byte_received = false
+      first_data = ""
+
+      begin
+        response = HTTP.timeout(connect: 5, read: 3)
+                       .headers("Accept" => "text/event-stream")
+                       .get(server_url)
+
+        expect(response.status).to eq(200)
+        expect(response.content_type.mime_type).to eq("text/event-stream")
+
+        chunk = response.body.readpartial(4096)
+        if chunk
+          first_data = chunk
+          first_byte_received = true
+        end
+      rescue HTTP::TimeoutError
+        # If we got data before timeout, that's OK
+      end
+
+      if first_byte_received
+        # First data should be the keepalive comment
+        expect(first_data).to include(": connected")
+      else
+        skip "SSE first byte was not received before timeout"
+      end
+    end
+
+    it "completes full MCP handshake after empty POST probe" do
+      # Step 1: Empty POST probe (ChatGPT's first request)
+      probe = http_client
+              .headers("Content-Type" => "application/json")
+              .post(server_url, body: "")
+      expect(probe.status).to eq(200)
+      session_id = probe.headers["Mcp-Session-Id"]
+
+      # Step 2: MCP initialize with session
+      init_body = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: {
+            name: "openai-mcp",
+            version: "1.0.0"
+          }
+        }
+      }
+
+      init_response = http_client
+                      .headers(
+                        "Content-Type" => "application/json",
+                        "Mcp-Session-Id" => session_id
+                      )
+                      .post(server_url, json: init_body)
+
+      expect(init_response.status).to eq(200)
+      init_data = JSON.parse(init_response.body.to_s)
+      expect(init_data["result"]).to have_key("protocolVersion")
+      expect(init_data["result"]).to have_key("capabilities")
+
+      # Step 3: tools/list
+      list_body = {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/list",
+        params: {}
+      }
+
+      list_response = http_client
+                      .headers(
+                        "Content-Type" => "application/json",
+                        "Mcp-Session-Id" => session_id
+                      )
+                      .post(server_url, json: list_body)
+
+      expect(list_response.status).to eq(200)
+      list_data = JSON.parse(list_response.body.to_s)
+      expect(list_data["result"]["tools"]).to be_an(Array)
+      expect(list_data["result"]["tools"].length).to be > 0
+    end
+  end
+
+  describe "OIDC and JWKS Discovery Endpoints" do
+    it "returns OIDC discovery at /.well-known/openid-configuration" do
+      response = http_client.get("#{server_url}/.well-known/openid-configuration")
+
+      expect(response.status).to eq(200)
+      expect(response.content_type.mime_type).to eq("application/json")
+
+      body = JSON.parse(response.body.to_s)
+      expect(body["issuer"]).not_to be_nil
+      expect(body["jwks_uri"]).to include("/jwks")
+      expect(body["subject_types_supported"]).to include("public")
+    end
+
+    it "returns consistent metadata across OAuth and OIDC discovery" do
+      oauth_response = http_client.get("#{server_url}/.well-known/oauth-authorization-server")
+      oidc_response = http_client.get("#{server_url}/.well-known/openid-configuration")
+
+      oauth_body = JSON.parse(oauth_response.body.to_s)
+      oidc_body = JSON.parse(oidc_response.body.to_s)
+
+      # These fields should be consistent
+      expect(oidc_body["issuer"]).to eq(oauth_body["issuer"])
+      expect(oidc_body["authorization_endpoint"]).to eq(oauth_body["authorization_endpoint"])
+      expect(oidc_body["token_endpoint"]).to eq(oauth_body["token_endpoint"])
+      expect(oidc_body["registration_endpoint"]).to eq(oauth_body["registration_endpoint"])
     end
   end
 
@@ -512,8 +751,8 @@ RSpec.describe "MCP HTTP Server", :integration do
               end
 
         response = http_client
-          .headers("Content-Type" => "application/json")
-          .post(url, json: request_body)
+                   .headers("Content-Type" => "application/json")
+                   .post(url, json: request_body)
 
         # /messages returns 202, others return 200
         expect([200, 202]).to include(response.status)

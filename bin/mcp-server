@@ -82,6 +82,10 @@ require_relative "../lib/magi/archive/mcp/server/tools/prepend_content"
 require_relative "../lib/magi/archive/mcp/server/tools/find_and_replace"
 require_relative "../lib/magi/archive/mcp/server/tools/find_in_card"
 require_relative "../lib/magi/archive/mcp/server/tools/get_card_outline"
+require_relative "../lib/magi/archive/mcp/server/tools/update_section"
+require_relative "../lib/magi/archive/mcp/server/tools/diff_card"
+require_relative "../lib/magi/archive/mcp/server/tools/get_card_stats"
+require_relative "../lib/magi/archive/mcp/server/tools/template_card"
 require_relative "../lib/magi/archive/mcp/server/tools/submit_feedback"
 
 # Initialize the Magi Archive tools
@@ -178,6 +182,10 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::FindAndReplace,
     Magi::Archive::Mcp::Server::Tools::FindInCard,
     Magi::Archive::Mcp::Server::Tools::GetCardOutline,
+    Magi::Archive::Mcp::Server::Tools::UpdateSection,
+    Magi::Archive::Mcp::Server::Tools::DiffCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardStats,
+    Magi::Archive::Mcp::Server::Tools::TemplateCard,
     Magi::Archive::Mcp::Server::Tools::SubmitFeedback
   ],
   server_context: server_context

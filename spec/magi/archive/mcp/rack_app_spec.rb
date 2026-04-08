@@ -143,6 +143,180 @@ RSpec.describe Magi::Archive::Mcp::RackApp do
       expect(parsed["endpoints"]["mcp"]).to eq("/mcp")
     end
   end
+
+  describe "empty POST body handling" do
+    it "returns 200 with server info for empty POST to /" do
+      status, _, body = make_request("POST", "/", body: "",
+                                                  headers: { "Content-Type" => "application/json" })
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["jsonrpc"]).to eq("2.0")
+      expect(parsed["result"]["protocolVersion"]).to eq("2025-06-18")
+      expect(parsed["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "returns 200 for whitespace-only POST body" do
+      status, _, body = make_request("POST", "/", body: "  \n  ",
+                                                  headers: { "Content-Type" => "application/json" })
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "returns 200 for nil body" do
+      status, _, body = make_request("POST", "/", body: nil,
+                                                  headers: { "Content-Type" => "application/json" })
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "returns SSE for empty POST with Accept: text/event-stream" do
+      status, headers, = make_request("POST", "/", body: "",
+                                                   headers: {
+                                                     "Content-Type" => "application/json",
+                                                     "Accept" => "text/event-stream"
+                                                   })
+
+      expect(status).to eq(200)
+      expect(headers["Content-Type"]).to eq("text/event-stream")
+    end
+
+    it "works on all MCP POST endpoints" do
+      %w[/ /mcp /message].each do |path|
+        status, _, body = make_request("POST", path, body: "",
+                                                     headers: { "Content-Type" => "application/json" })
+
+        expect(status).to eq(200)
+        parsed = JSON.parse(body.first)
+        expect(parsed["result"]["serverInfo"]["name"]).to eq("magi-archive")
+      end
+    end
+  end
+
+  describe "empty POST before auth check" do
+    before do
+      # Simulate OAUTH_REQUIRE_AUTH=true with OAuth enabled
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("OAUTH_REQUIRE_AUTH", "false").and_return("true")
+      allow(ENV).to receive(:fetch).with("OAUTH_ISSUER_URL", anything).and_return("https://mcp.magi-agi.org")
+
+      mock_token_issuer = double("TokenIssuer")
+      mock_credential_store = double("CredentialStore")
+      mock_client_cards = double("ClientCards")
+      described_class.token_issuer = mock_token_issuer
+      described_class.credential_store = mock_credential_store
+      described_class.client_cards = mock_client_cards
+    end
+
+    after do
+      described_class.token_issuer = nil
+      described_class.credential_store = nil
+      described_class.client_cards = nil
+    end
+
+    it "returns 200 for empty POST even when auth is required" do
+      status, _, body = make_request("POST", "/", body: "",
+                                                  headers: { "Content-Type" => "application/json" })
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["result"]["serverInfo"]["name"]).to eq("magi-archive")
+    end
+
+    it "does NOT return 401 for empty POST when auth is required" do
+      status, = make_request("POST", "/", body: "",
+                                          headers: { "Content-Type" => "application/json" })
+
+      expect(status).not_to eq(401)
+    end
+
+    it "returns 401 for non-empty POST without token when auth is required" do
+      body = JSON.generate({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} })
+      status, = make_request("POST", "/", body: body,
+                                          headers: { "Content-Type" => "application/json" })
+
+      expect(status).to eq(401)
+    end
+  end
+
+  describe "OIDC discovery endpoint" do
+    it "returns openid-configuration" do
+      status, headers, body = make_request("GET", "/.well-known/openid-configuration")
+
+      expect(status).to eq(200)
+      expect(headers["Content-Type"]).to eq("application/json")
+
+      parsed = JSON.parse(body.first)
+      expect(parsed).to have_key("issuer")
+      expect(parsed).to have_key("authorization_endpoint")
+      expect(parsed).to have_key("token_endpoint")
+      expect(parsed).to have_key("jwks_uri")
+      expect(parsed["response_types_supported"]).to include("code")
+      expect(parsed["code_challenge_methods_supported"]).to include("S256")
+      expect(parsed["id_token_signing_alg_values_supported"]).to include("RS256")
+      expect(parsed["subject_types_supported"]).to include("public")
+    end
+  end
+
+  describe "JWKS endpoint" do
+    it "returns empty keys when no token issuer configured" do
+      status, _, body = make_request("GET", "/jwks")
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["keys"]).to eq([])
+    end
+
+    it "returns JWK when token issuer is configured" do
+      require "openssl"
+      key = OpenSSL::PKey::RSA.generate(2048)
+      mock_issuer = double("TokenIssuer", public_key: key.public_key)
+      described_class.token_issuer = mock_issuer
+
+      status, _, body = make_request("GET", "/jwks")
+
+      expect(status).to eq(200)
+      parsed = JSON.parse(body.first)
+      expect(parsed["keys"].length).to eq(1)
+
+      jwk = parsed["keys"].first
+      expect(jwk["kty"]).to eq("RSA")
+      expect(jwk["alg"]).to eq("RS256")
+      expect(jwk["use"]).to eq("sig")
+      expect(jwk).to have_key("n")
+      expect(jwk).to have_key("e")
+      expect(jwk).to have_key("kid")
+
+      described_class.token_issuer = nil
+    end
+
+    it "responds on all JWKS paths" do
+      %w[/jwks /jwks.json /.well-known/jwks.json].each do |path|
+        status, _, body = make_request("GET", path)
+        expect(status).to eq(200)
+        parsed = JSON.parse(body.first)
+        expect(parsed).to have_key("keys")
+      end
+    end
+  end
+
+  describe "SSE first byte" do
+    it "delivers connected comment as first yield" do
+      _, _, body = make_request("GET", "/sse")
+
+      chunks = []
+      body.each do |chunk|
+        chunks << chunk
+        break if chunks.length >= 2
+      end
+
+      expect(chunks.first).to start_with(": connected")
+    end
+  end
 end
 
 RSpec.describe Magi::Archive::Mcp::SessionManager do

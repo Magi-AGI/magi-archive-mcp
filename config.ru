@@ -78,6 +78,10 @@ mcp_server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::FindAndReplace,
     Magi::Archive::Mcp::Server::Tools::FindInCard,
     Magi::Archive::Mcp::Server::Tools::GetCardOutline,
+    Magi::Archive::Mcp::Server::Tools::UpdateSection,
+    Magi::Archive::Mcp::Server::Tools::DiffCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardStats,
+    Magi::Archive::Mcp::Server::Tools::TemplateCard,
     Magi::Archive::Mcp::Server::Tools::SubmitFeedback
   ],
   server_context: server_context
