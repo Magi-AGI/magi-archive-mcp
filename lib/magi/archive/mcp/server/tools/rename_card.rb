@@ -10,7 +10,7 @@ module Magi
         module Tools
           # MCP Tool for renaming cards (admin only)
           class RenameCard < ::MCP::Tool
-            description "Rename a card in the Magi Archive wiki (requires admin role)"
+            description "Rename a card in the Magi Archive wiki (requires admin role). Best practice: after renaming, check if the parent card or a sibling card has a table of contents (TOC) and update the old name to the new name. TOCs are typically on the parent card itself or a sibling like Parent+table-of-contents."
 
             annotations(
               read_only_hint: true,
