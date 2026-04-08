@@ -161,7 +161,7 @@ RSpec.describe "Content Editing Tools", :integration do
 
       expect {
         tools.find_and_replace(card_name, find: "nonexistent text xyz", replace: "new")
-      }.to raise_error(Magi::Archive::Mcp::Client::ValidationError)
+      }.to raise_error(Magi::Archive::Mcp::Client::APIError, /not found/i)
     end
 
     it "handles HTML tag replacement" do
