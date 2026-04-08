@@ -8,6 +8,7 @@
 
 require "bundler/setup"
 require "mcp"
+require "tmpdir"
 
 # Debug logging to file (temporary - helps diagnose connection issues)
 DEBUG_LOG = ENV["MCP_DEBUG_LOG"] || File.join(Dir.tmpdir, "magi-mcp-debug.log")
