@@ -86,6 +86,11 @@ mcp_server = ::MCP::Server.new(
     # Auto-linking
     Magi::Archive::Mcp::Server::Tools::AutoLink,
 
+    # File upload tools
+    Magi::Archive::Mcp::Server::Tools::UploadFile,
+    Magi::Archive::Mcp::Server::Tools::UploadFromUrl,
+    Magi::Archive::Mcp::Server::Tools::GetFileUrl,
+
     # Content editing tools
     Magi::Archive::Mcp::Server::Tools::AppendContent,
     Magi::Archive::Mcp::Server::Tools::PrependContent,
