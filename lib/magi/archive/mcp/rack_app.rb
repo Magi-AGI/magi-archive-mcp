@@ -153,6 +153,18 @@ module Magi
           def oauth_enabled?
             token_issuer && credential_store && client_cards
           end
+
+          # Localhost bypass: requests directly addressed to 127.0.0.1 / localhost
+          # (i.e. same-box services like magi-assistant-gm hitting 127.0.0.1:3002)
+          # skip the OAuth gate. nginx-proxied external traffic preserves the
+          # original Host header (mcp.magi-agi.org) and is therefore NOT bypassed,
+          # so this widens the trust boundary only to processes that share the
+          # same machine.
+          def localhost_origin?(env)
+            host = env["HTTP_HOST"] || env["SERVER_NAME"] || ""
+            host == "127.0.0.1" || host == "127.0.0.1:3002" ||
+              host == "localhost" || host == "localhost:3002"
+          end
         end
 
         def initialize
@@ -550,8 +562,13 @@ module Magi
             # Check Bearer token for per-user Tools
             per_user_tools = resolve_bearer_token(env)
 
-            # If auth required but no valid token, reject
-            if self.class.oauth_require_auth? && per_user_tools.nil? && self.class.oauth_enabled?
+            # If auth required but no valid token, reject — except for same-box
+            # localhost callers (host = 127.0.0.1 / localhost), which are trusted
+            # by virtue of running on the same machine. External requests come
+            # in with Host=mcp.magi-agi.org (preserved by nginx) so they remain
+            # gated by OAuth.
+            if self.class.oauth_require_auth? && per_user_tools.nil? && self.class.oauth_enabled? &&
+               !self.class.localhost_origin?(env)
               issuer_url = self.class.oauth_issuer_url
               headers = add_mcp_headers({
                                           "Content-Type" => "application/json",
