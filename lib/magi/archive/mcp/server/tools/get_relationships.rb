@@ -48,9 +48,12 @@ module Magi
                           tools.get_links(card_name)
                         end
 
+                # Build hybrid JSON response
+                response = build_response(card_name, relationship_type, result)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_relationships(card_name, relationship_type, result)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -65,6 +68,38 @@ module Magi
               end
 
               private
+
+              def build_response(card_name, rel_type, result)
+                key = rel_type
+                cards = result[key] || []
+                count_key = "#{key}_count"
+                count = result[count_key] || cards.size
+
+                # Transform to ChatGPT-compatible results array
+                result_items = cards.map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+                  {
+                    id: card['name'],
+                    title: card['name'],
+                    snippet: card['type'],
+                    source: card_url,
+                    url: card_url
+                  }
+                end
+
+                card_url = "https://wiki.magi-agi.org/#{card_name.to_s.gsub(' ', '_')}"
+
+                {
+                  id: card_name,
+                  title: "#{rel_type.capitalize} for #{card_name}",
+                  source: card_url,
+                  url: card_url,
+                  results: result_items,
+                  total: count,
+                  text: format_relationships(card_name, rel_type, result),
+                  metadata: { relationship_type: rel_type }
+                }
+              end
 
               def format_relationships(card_name, rel_type, result)
                 # Get the appropriate key from the result

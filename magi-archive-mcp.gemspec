@@ -38,6 +38,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # Runtime dependencies
+  spec.add_dependency "bcrypt", "~> 3.1"
   spec.add_dependency "dotenv", "~> 2.8"
   spec.add_dependency "http", "~> 5.0"
   spec.add_dependency "jwt", "~> 2.7"

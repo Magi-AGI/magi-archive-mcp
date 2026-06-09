@@ -10,7 +10,7 @@ module Magi
         module Tools
           # MCP Tool for fetching a single card from the wiki
           class GetCard < ::MCP::Tool
-            description "Get a single card by name from the Magi Archive wiki. Note: Pointer cards contain references to other cards (use list_children to see them). Search cards contain dynamic queries (content shows query, not results). Use underscores for exact name matches."
+            description "Get a single card by name from the Magi Archive wiki. Returns raw stored content by default (often HTML with unresolved {{inclusions}}). Pass rendered=true to get fully resolved content as the end user sees it — essential for cards with nested subcards or templates. Note: Pointer cards contain references (use list_children); Search cards show queries not results."
 
             annotations(
               read_only_hint: true,
@@ -39,20 +39,28 @@ module Magi
                   description: "Character offset to start content from (default: 0). Use with max_content_length to paginate through large cards.",
                   default: 0,
                   minimum: 0
+                },
+                rendered: {
+                  type: "boolean",
+                  description: "Return fully rendered HTML with all inclusions/nests ({{...}}) resolved, as the end user would see it. Useful for cards with nested subcards or complex templates. Default: false (returns raw stored content).",
+                  default: false
                 }
               },
               required: ["name"]
             )
 
             class << self
-              def call(name:, with_children: false, max_content_length: 8000, content_offset: 0, server_context:)
+              def call(name:, with_children: false, max_content_length: 8000, content_offset: 0, rendered: false, server_context:)
                 tools = server_context[:magi_tools]
 
-                card = tools.get_card(name, with_children: with_children)
+                card = tools.get_card(name, with_children: with_children, rendered: rendered)
+
+                # Build hybrid JSON response with text field for markdown
+                result = build_response(card, max_content_length: max_content_length, content_offset: content_offset)
 
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_card(card, max_content_length: max_content_length, content_offset: content_offset)
+                  text: JSON.generate(result)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -84,6 +92,44 @@ module Magi
               end
 
               private
+
+              def build_response(card, max_content_length:, content_offset:)
+                is_virtual = virtual_card?(card)
+                full_content = card['content'].to_s.strip
+                total_length = full_content.length
+
+                # Calculate pagination
+                truncated = false
+                next_offset = nil
+                if content_offset < total_length && max_content_length > 0
+                  remaining = full_content[content_offset..]
+                  if remaining && remaining.length > max_content_length
+                    truncated = true
+                    next_offset = content_offset + max_content_length
+                  end
+                end
+
+                card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+
+                {
+                  id: card['name'],
+                  title: card['name'],
+                  text: format_card(card, max_content_length: max_content_length, content_offset: content_offset),
+                  source: card_url,
+                  url: card_url,
+                  metadata: {
+                    type: card['type'],
+                    card_id: card['id'],
+                    updated_at: card['updated_at'],
+                    virtual_card: is_virtual,
+                    total_length: total_length,
+                    content_offset: content_offset,
+                    truncated: truncated,
+                    next_offset: next_offset,
+                    children_count: card['children']&.size
+                  }.compact
+                }
+              end
 
               # Detect if a card is a virtual/junction card
               # Virtual cards are empty compound cards that serve as hierarchy parents

@@ -32,6 +32,7 @@ module Magi
         #
         # @param name [String] the card name
         # @param with_children [Boolean] include child cards (default: false)
+        # @param rendered [Boolean] return fully rendered HTML with inclusions resolved (default: false)
         # @return [Hash] card data with keys: name, content, type, id, url, etc.
         # @raise [Client::NotFoundError] if card doesn't exist
         # @raise [Client::AuthorizationError] if user lacks permission to view card
@@ -43,9 +44,14 @@ module Magi
         # @example With children
         #   card = tools.get_card("Business Plan", with_children: true)
         #   # => { "name" => "Business Plan", "children" => [...], ... }
-        def get_card(name, with_children: false)
+        #
+        # @example Rendered (all inclusions resolved)
+        #   card = tools.get_card("Administrator", rendered: true)
+        #   # => { "name" => "Administrator", "content" => "<full rendered HTML>", "rendered" => true }
+        def get_card(name, with_children: false, rendered: false)
           params = {}
           params[:with_children] = true if with_children
+          params[:rendered] = true if rendered
 
           client.get("/cards/#{encode_card_name(name)}", **params)
         end
@@ -282,6 +288,209 @@ module Magi
           client.patch("/cards/#{encode_card_name(name)}", **payload)
         end
 
+        # Append content to a card
+        #
+        # Adds content to the end of the card's existing content.
+        # Works on any content format (HTML, markdown, wiki links, etc).
+        #
+        # @param name [String] the card name
+        # @param content [String] content to append
+        # @param separator [String] separator between existing and new content (default: "")
+        # @return [Hash] updated card data
+        def append_content(name, content:, separator: "")
+          client.patch("/cards/#{encode_card_name(name)}",
+                       patch: { mode: "append", content: content, separator: separator })
+        end
+
+        # Prepend content to a card
+        #
+        # Adds content to the beginning of the card's existing content.
+        # Works on any content format (HTML, markdown, wiki links, etc).
+        #
+        # @param name [String] the card name
+        # @param content [String] content to prepend
+        # @param separator [String] separator between new and existing content (default: "")
+        # @return [Hash] updated card data
+        def prepend_content(name, content:, separator: "")
+          client.patch("/cards/#{encode_card_name(name)}",
+                       patch: { mode: "prepend", content: content, separator: separator })
+        end
+
+        # Find and replace text in a card's content
+        #
+        # Performs a literal string find-and-replace on the card's raw stored content.
+        # Works on any content format (HTML, markdown, wiki links, etc).
+        #
+        # @param name [String] the card name
+        # @param find [String] the text to find (exact match, not regex)
+        # @param replace [String] the replacement text
+        # @param occurrence [String] which occurrences to replace: "first" (default), "last", "all"
+        # @return [Hash] updated card data
+        # @raise [Client::ValidationError] if text not found in card
+        def find_and_replace(name, find:, replace:, occurrence: "first")
+          client.patch("/cards/#{encode_card_name(name)}",
+                       patch: { mode: "find_replace", find: find, replace: replace, occurrence: occurrence })
+        end
+
+        # Search within a card's content
+        #
+        # Searches for text within a card's raw stored content and returns
+        # matching excerpts with surrounding context. Useful for finding
+        # specific content without fetching the entire card.
+        #
+        # @param name [String] the card name
+        # @param query [String] the text to search for (exact match)
+        # @param context_chars [Integer] characters of context around each match (default: 100)
+        # @return [Hash] with keys: card, query, match_count, content_length, matches
+        def find_in_card(name, query:, context_chars: 100)
+          client.get("/cards/#{encode_card_name(name)}/search_content",
+                     query: query, context_chars: context_chars)
+        end
+
+        # Get the heading outline of a card
+        #
+        # Returns the heading structure (HTML h1-h6 and Markdown #) without
+        # the full content. Useful for understanding card structure before
+        # deciding which section to read or update.
+        #
+        # @param name [String] the card name
+        # @return [Hash] with keys: card, type, content_length, headings
+        def get_card_outline(name)
+          client.get("/cards/#{encode_card_name(name)}/outline")
+        end
+
+        # Get statistics about a card without fetching full content
+        #
+        # Computes word count, character count, section count, paragraph count,
+        # link count (wiki and external), and image count from a card's content.
+        #
+        # @param name [String] the card name
+        # @return [Hash] with keys: card, type, updated_at, stats
+        # @raise [Client::NotFoundError] if card doesn't exist
+        def get_card_stats(name)
+          card = get_card(name)
+          content = card["content"].to_s
+
+          # Try to get outline for section count (may fail for some card types)
+          section_count = 0
+          begin
+            outline = get_card_outline(name)
+            section_count = (outline["headings"] || []).size
+          rescue StandardError
+            # outline not available for all card types
+          end
+
+          # Compute stats
+          word_count = content.split(/\s+/).reject(&:empty?).size
+          char_count = content.length
+
+          # Count wiki links [[...]] and markdown links [text](url) and HTML links <a href=...>
+          wiki_links = content.scan(/\[\[([^\]]+)\]\]/).size
+          md_links = content.scan(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/).size
+          html_links = content.scan(/<a\s[^>]*href/i).size
+          link_count = wiki_links + md_links + html_links
+
+          # Count images
+          md_images = content.scan(/!\[([^\]]*)\]\(([^)]+)\)/).size
+          html_images = content.scan(/<img\s/i).size
+          image_count = md_images + html_images
+
+          # Paragraph count (non-empty blocks separated by blank lines or <p> tags)
+          paragraphs = content.split(/\n\s*\n/).reject { |p| p.strip.empty? }.size
+          html_paragraphs = content.scan(/<p[\s>]/i).size
+          paragraph_count = [paragraphs, html_paragraphs].max
+
+          {
+            "card" => name,
+            "type" => card["type"],
+            "updated_at" => card["updated_at"],
+            "stats" => {
+              "word_count" => word_count,
+              "char_count" => char_count,
+              "section_count" => section_count,
+              "paragraph_count" => paragraph_count,
+              "link_count" => link_count,
+              "image_count" => image_count,
+              "wiki_links" => wiki_links,
+              "external_links" => md_links + html_links
+            }
+          }
+        end
+
+        # Update content within a specific heading section by name
+        #
+        # Finds the section by heading text (case-insensitive match), replaces its
+        # body content (preserving the heading), and updates the card. The section
+        # body extends from after the heading to the next heading at the same or
+        # higher level, or the end of the content.
+        #
+        # This is a composite client-side tool: it fetches the card, parses headings,
+        # replaces the section body, and patches the card with the new full content.
+        #
+        # @param name [String] the card name
+        # @param section [String] the heading text to find (e.g., "Introduction")
+        # @param content [String] new content for the section body
+        # @return [Hash] updated card data
+        # @raise [Client::NotFoundError] if card doesn't exist
+        # @raise [Client::ValidationError] if section heading not found
+        # @raise [Client::AuthorizationError] if user lacks permission
+        #
+        # @example Update a section
+        #   tools.update_section("MyCard", section: "Introduction", content: "New intro text")
+        def update_section(name, section:, content:)
+          card = get_card(name)
+          raw_content = card["content"].to_s
+
+          # Find section boundaries using heading patterns
+          headings = parse_headings(raw_content)
+
+          target = headings.find { |h| h[:text].strip.downcase == section.strip.downcase }
+          unless target
+            raise Client::ValidationError.new(
+              "Section '#{section}' not found in card '#{name}'",
+              status: 422, error_code: "validation_error"
+            )
+          end
+
+          # Find end of section (next heading at same or higher level, or end of content)
+          target_idx = headings.index(target)
+          section_end = raw_content.length
+          headings[(target_idx + 1)..].each do |h|
+            if h[:level] <= target[:level]
+              section_end = h[:position]
+              break
+            end
+          end
+
+          # Build new content: everything before section body + new content + everything after section
+          heading_end = target[:heading_end]
+          new_full_content = raw_content[0...heading_end] + "\n" + content.strip + "\n" + raw_content[section_end..]
+
+          client.patch("/cards/#{encode_card_name(name)}", content: new_full_content)
+        end
+
+        # Submit feedback from an AI agent
+        #
+        # Appends feedback to the MCP Agent Feedback log card on the wiki.
+        # Used by AI agents to report issues, suggest improvements, or
+        # log observations during their interactions.
+        #
+        # @param category [String] feedback category: "bug", "feature_request", "usability", "performance", "other"
+        # @param message [String] the feedback message
+        # @param tool_name [String, nil] which MCP tool prompted the feedback (optional)
+        # @return [Hash] updated card data
+        def submit_feedback(category:, message:, tool_name: nil)
+          timestamp = Time.now.utc.iso8601
+          entry = "\n<p><strong>[#{timestamp}]</strong> "
+          entry += "<em>(#{tool_name})</em> " if tool_name
+          entry += "<strong>[#{category}]</strong> #{message}</p>"
+
+          append_content("MCP Agent Feedback+log", content: entry, separator: "\n")
+        rescue Client::NotFoundError
+          # Create the feedback log card if it doesn't exist
+          create_card("MCP Agent Feedback+log", content: entry, type: "RichText")
+        end
+
         # Delete a card
         #
         # Permanently deletes a card. This operation cannot be undone.
@@ -333,6 +542,123 @@ module Magi
         def rename_card(name, new_name, update_referers: true)
           path = "/cards/#{encode_card_name(name)}/rename"
           client.put(path, new_name: new_name, update_referers: update_referers)
+        end
+
+        # Upload a file or image to create/update a File/Image card.
+        #
+        # @param name [String] card name
+        # @param type [String] "File" or "Image"
+        # @param file_data [String] base64-encoded file content
+        # @param filename [String] original filename (e.g., "diagram.png")
+        # @return [Hash] card data with file_url and image_urls
+        def upload_file(name, type:, file_data:, filename:)
+          client.post("/cards/#{encode_card_name(name)}/upload",
+                      type: type, file_data: file_data, filename: filename)
+        end
+
+        # Create a file or image card from a remote URL.
+        #
+        # @param name [String] card name
+        # @param type [String] "File" or "Image"
+        # @param url [String] URL to the file
+        # @return [Hash] card data with file_url
+        def upload_from_url(name, type:, url:)
+          require "net/http"
+          require "base64"
+
+          uri = URI.parse(url)
+          http = Net::HTTP.new(uri.host, uri.port)
+          http.use_ssl = (uri.scheme == "https")
+          http.open_timeout = 10
+          http.read_timeout = 30
+          response = http.get(uri.request_uri)
+
+          unless response.is_a?(Net::HTTPSuccess)
+            raise Client::ValidationError.new(
+              "Failed to download from URL: HTTP #{response.code}",
+              status: response.code.to_i, error_code: "download_error", details: {}
+            )
+          end
+
+          filename = File.basename(uri.path)
+          filename = "download.dat" if filename.empty? || !filename.include?(".")
+          file_data = Base64.strict_encode64(response.body)
+
+          upload_file(name, type: type, file_data: file_data, filename: filename)
+        end
+
+        # Get the download URL for a File or Image card.
+        #
+        # @param name [String] card name
+        # @param size [String, nil] image size variant: "icon", "small", "medium", "large", "original"
+        # @return [Hash] with file_url and image_urls keys
+        def get_file_url(name, size: nil)
+          result = client.get("/cards/#{encode_card_name(name)}/file_url")
+          if size && result["image_urls"]
+            result["selected_url"] = result["image_urls"][size] || result["file_url"]
+          end
+          result
+        end
+
+        # Get the default content template for a card type
+        #
+        # Templates are stored in Decko's +*type+*default rule cards.
+        # When a new card of a given type is created, it starts with
+        # this default content.
+        #
+        # @param type_name [String] the card type name (e.g., "Article", "Species")
+        # @return [Hash] with keys: type, template_card, content, exists
+        #
+        # @example
+        #   template = tools.get_template("Article")
+        #   # => { "type" => "Article", "template_card" => "Article+*type+*default",
+        #   #      "content" => "...", "exists" => true }
+        #
+        # @example Non-existent template
+        #   template = tools.get_template("Unknown")
+        #   # => { "type" => "Unknown", "template_card" => "Unknown+*type+*default",
+        #   #      "content" => "", "exists" => false }
+        def get_template(type_name)
+          template_name = "#{type_name}+*type+*default"
+          begin
+            card = get_card(template_name)
+            {
+              "type" => type_name,
+              "template_card" => template_name,
+              "content" => card["content"].to_s,
+              "exists" => true
+            }
+          rescue Client::NotFoundError
+            {
+              "type" => type_name,
+              "template_card" => template_name,
+              "content" => "",
+              "exists" => false
+            }
+          end
+        end
+
+        # Set the default content template for a card type
+        #
+        # Creates or updates the +*type+*default rule card.
+        # If the template already exists, it is updated; otherwise a new
+        # template card is created.
+        #
+        # @param type_name [String] the card type name
+        # @param content [String] the template content
+        # @return [Hash] updated or created template card data
+        #
+        # @example
+        #   tools.set_template("Article", content: "# New Article\n\nWrite content here.")
+        def set_template(type_name, content:)
+          template_name = "#{type_name}+*type+*default"
+          begin
+            # Try to update existing template
+            client.patch("/cards/#{encode_card_name(template_name)}", content: content)
+          rescue Client::NotFoundError
+            # Template doesn't exist yet, create it
+            client.post("/cards", name: template_name, type: "Basic", content: content)
+          end
         end
 
         # Run spoiler scan job
@@ -843,6 +1169,66 @@ module Magi
           client.post("/cards/#{encode_card_name(name)}/restore", **payload)
         end
 
+        # Show differences between card revisions
+        #
+        # Compares two specific revisions, or a revision with the current
+        # version. Returns a unified diff with added/removed line counts.
+        #
+        # @param name [String] the card name
+        # @param from_revision [Integer, nil] act_id of the earlier revision
+        # @param to_revision [Integer, nil] act_id of the later revision (nil = current)
+        # @return [Hash] with keys: card, from, to, diff, summary
+        # @raise [Client::NotFoundError] if card or revision doesn't exist
+        # @raise [Client::ValidationError] if card has no revision history
+        def diff_card(name, from_revision: nil, to_revision: nil)
+          # Get the "from" content
+          if from_revision
+            from_data = get_revision(name, act_id: from_revision)
+            from_content = from_data.dig("snapshot", "content").to_s
+            from_label = "revision #{from_revision} (#{from_data['acted_at']})"
+          else
+            # If no from_revision, get the earliest revision from history
+            history = get_card_history(name, limit: 1)
+            revisions = history["revisions"] || []
+            raise Client::ValidationError.new("Card has no revision history") if revisions.empty?
+
+            rev = revisions.last
+            from_data = get_revision(name, act_id: rev["act_id"])
+            from_content = from_data.dig("snapshot", "content").to_s
+            from_label = "revision #{rev['act_id']} (#{from_data['acted_at']})"
+          end
+
+          # Get the "to" content
+          if to_revision
+            to_data = get_revision(name, act_id: to_revision)
+            to_content = to_data.dig("snapshot", "content").to_s
+            to_label = "revision #{to_revision} (#{to_data['acted_at']})"
+          else
+            card = get_card(name)
+            to_content = card["content"].to_s
+            to_label = "current"
+          end
+
+          # Compute diff
+          diff_lines = compute_unified_diff(from_content, to_content, from_label, to_label)
+
+          # Compute summary stats
+          added = diff_lines.count { |l| l.start_with?("+") && !l.start_with?("+++") }
+          removed = diff_lines.count { |l| l.start_with?("-") && !l.start_with?("---") }
+
+          {
+            "card" => name,
+            "from" => from_label,
+            "to" => to_label,
+            "diff" => diff_lines.join("\n"),
+            "summary" => {
+              "lines_added" => added,
+              "lines_removed" => removed,
+              "total_changes" => added + removed
+            }
+          }
+        end
+
         # List deleted cards in trash
         #
         # Returns cards that have been deleted (moved to trash) but not
@@ -1151,11 +1537,16 @@ module Magi
           # NOTE: Periods (.) MUST be encoded as %2E because Rails interprets
           # unencoded periods in URL paths as format separators (e.g., "Dr.Venn"
           # would be parsed as format: "Venn"). This breaks cards like "Dr. Smith".
-          name.chars.map do |char|
-            if char.match?(/[A-Za-z0-9\-_~+]/)
+          #
+          # Force UTF-8 encoding before percent-encoding bytes. On Windows,
+          # strings may arrive in IBM437/Windows-1252 which produces wrong
+          # byte sequences for non-ASCII chars (e.g., ö → %94 instead of %C3%B6).
+          utf8_name = name.encode("UTF-8")
+          utf8_name.chars.map do |char|
+            if char.ascii_only? && char.match?(/[A-Za-z0-9\-_~+]/)
               char
             else
-              format("%%%02X", char.ord)
+              char.bytes.map { |byte| format("%%%02X", byte) }.join
             end
           end.join
         end
@@ -1175,6 +1566,8 @@ module Magi
       # @param since [Time, String, nil] specific start date (overrides days)
       # @param before [Time, String, nil] specific end date (default: now)
       # @param limit [Integer] maximum results per page (default: 100)
+      # @param max_cards [Integer] maximum total cards to fetch (default: 5000).
+      #   Safety cap to prevent unbounded memory growth.
       # @return [Array<Hash>] array of updated cards with metadata
       #
       # @example Get cards updated in last week
@@ -1186,21 +1579,20 @@ module Magi
       #     since: "2025-11-25",
       #     before: "2025-12-02"
       #   )
-      def get_recent_changes(days: 7, since: nil, before: nil, limit: 100)
+      def get_recent_changes(days: 7, since: nil, before: nil, limit: 100, max_cards: 5000)
         since_time = since ? parse_time(since) : (Time.now - (days * 24 * 60 * 60))
         before_time = before ? parse_time(before) : Time.now
 
         all_cards = []
         offset = 0
         loop_count = 0
-        max_loops = 100 # Safety limit to prevent infinite loops
+        max_loops = [max_cards / [limit, 1].max + 1, 100].min
 
         loop do
-          # Safety check: prevent infinite loop if server has pagination bug
           loop_count += 1
           if loop_count > max_loops
             warn "Pagination safety limit reached (#{max_loops} pages). " \
-                 "Possible server pagination bug. Returning #{all_cards.size} cards so far."
+                 "Returning #{all_cards.size} cards so far."
             break
           end
 
@@ -1215,6 +1607,13 @@ module Magi
           break if cards.empty?
 
           all_cards.concat(cards)
+
+          # Stop if we've collected enough cards
+          if all_cards.size >= max_cards
+            all_cards = all_cards.first(max_cards)
+            break
+          end
+
           offset = result["next_offset"]
           break unless offset
         end
@@ -1366,8 +1765,10 @@ module Magi
         # This matches the existing pattern used for previous summaries
         card_name = "#{parent}+Weekly Work Summary #{date_str} - #{username}"
 
-        # Fetch recent changes
-        card_changes = get_recent_changes(days: days)
+        # Fetch recent changes (capped at 500 to avoid memory bloat —
+        # the Magi Archive has ~10K cards, and loading all of them caused
+        # the Decko process to grow from 124MB to 776MB+)
+        card_changes = get_recent_changes(days: days, max_cards: 500)
         repo_changes = scan_git_repos(base_path: base_path, days: days)
 
         # Format summary
@@ -1407,6 +1808,130 @@ module Magi
       end
 
       private
+
+      # Compute a unified diff between two strings
+      #
+      # Uses a simple LCS-based algorithm to produce a unified diff format
+      # with context lines around changes.
+      #
+      # @param old_text [String] the original text
+      # @param new_text [String] the new text
+      # @param old_label [String] label for the original version
+      # @param new_label [String] label for the new version
+      # @return [Array<String>] lines of the unified diff
+      def compute_unified_diff(old_text, new_text, old_label, new_label)
+        old_lines = old_text.lines.map(&:chomp)
+        new_lines = new_text.lines.map(&:chomp)
+
+        result = ["--- #{old_label}", "+++ #{new_label}"]
+
+        # Simple LCS-based diff
+        # Build a table of common subsequences
+        lcs = Array.new(old_lines.size + 1) { Array.new(new_lines.size + 1, 0) }
+        old_lines.each_with_index do |_, i|
+          new_lines.each_with_index do |_, j|
+            lcs[i + 1][j + 1] = if old_lines[i] == new_lines[j]
+                                   lcs[i][j] + 1
+                                 else
+                                   [lcs[i][j + 1], lcs[i + 1][j]].max
+                                 end
+          end
+        end
+
+        # Backtrack to find diff
+        diff_ops = []
+        i = old_lines.size
+        j = new_lines.size
+        while i.positive? || j.positive?
+          if i.positive? && j.positive? && old_lines[i - 1] == new_lines[j - 1]
+            diff_ops.unshift([:keep, old_lines[i - 1]])
+            i -= 1
+            j -= 1
+          elsif j.positive? && (i.zero? || lcs[i][j - 1] >= lcs[i - 1][j])
+            diff_ops.unshift([:add, new_lines[j - 1]])
+            j -= 1
+          else
+            diff_ops.unshift([:remove, old_lines[i - 1]])
+            i -= 1
+          end
+        end
+
+        # Format as unified diff with context
+        context = 3
+        chunks = []
+        current_chunk = nil
+
+        diff_ops.each_with_index do |op, idx|
+          if op[0] != :keep
+            # Start or extend a chunk
+            start = [idx - context, 0].max
+            unless current_chunk
+              current_chunk = { start: start, ops: [] }
+              # Add leading context
+              (start...idx).each { |ci| current_chunk[:ops] << diff_ops[ci] if diff_ops[ci] }
+            end
+            current_chunk[:ops] << op
+            current_chunk[:end_idx] = idx
+          elsif current_chunk && idx <= current_chunk[:end_idx] + context
+            current_chunk[:ops] << op
+          elsif current_chunk
+            chunks << current_chunk
+            current_chunk = nil
+          end
+        end
+        chunks << current_chunk if current_chunk
+
+        # If no changes
+        return result + ["(no differences)"] if chunks.empty?
+
+        chunks.each do |chunk|
+          chunk[:ops].each do |op|
+            case op[0]
+            when :keep then result << " #{op[1]}"
+            when :add then result << "+#{op[1]}"
+            when :remove then result << "-#{op[1]}"
+            end
+          end
+        end
+
+        result
+      end
+
+      # Parse headings from HTML and Markdown content
+      #
+      # Supports both HTML headings (<h1>text</h1> through <h6>text</h6>) and
+      # Markdown headings (# text through ###### text). Returns an array of
+      # heading metadata sorted by position in the content.
+      #
+      # @param content [String] the raw card content
+      # @return [Array<Hash>] array of { level:, text:, position:, heading_end: }
+      def parse_headings(content)
+        headings = []
+
+        # HTML headings: <h1>text</h1> through <h6>text</h6>
+        content.scan(/<h([1-6])[^>]*>(.*?)<\/h\1>/mi) do
+          match = Regexp.last_match
+          headings << {
+            level: match[1].to_i,
+            text: match[2].gsub(/<[^>]+>/, "").strip,
+            position: match.begin(0),
+            heading_end: match.end(0)
+          }
+        end
+
+        # Markdown headings: # text through ###### text
+        content.scan(/^(\#{1,6})\s+(.+)$/) do
+          match = Regexp.last_match
+          headings << {
+            level: match[1].length,
+            text: match[2].strip,
+            position: match.begin(0),
+            heading_end: match.end(0)
+          }
+        end
+
+        headings.sort_by { |h| h[:position] }
+      end
 
       # Parse time from various formats
       def parse_time(time_input)

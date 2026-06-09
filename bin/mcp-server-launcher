@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# frozen_string_literal: false
+#
+# MCP Server Launcher - resolves Ruby environment before starting the server
+#
+# MCP clients (Codex, Claude CLI, VS Code extensions) spawn this as a subprocess
+# WITHOUT sourcing shell profiles, so rbenv/rvm/asdf may not be in PATH.
+# This wrapper ensures Ruby and Bundler are discoverable before exec'ing the server.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GEM_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SERVER_SCRIPT="$SCRIPT_DIR/mcp-server"
+
+# --- Resolve Ruby environment ---
+
+# 1. rbenv
+if [ -d "$HOME/.rbenv/bin" ]; then
+  export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/shims:$PATH"
+  eval "$(rbenv init - bash 2>/dev/null)" || true
+fi
+
+# 2. rvm
+if [ -s "$HOME/.rvm/scripts/rvm" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.rvm/scripts/rvm" 2>/dev/null || true
+fi
+
+# 3. asdf
+if [ -s "$HOME/.asdf/asdf.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.asdf/asdf.sh" 2>/dev/null || true
+fi
+
+# 4. mise (formerly rtx)
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate bash 2>/dev/null)" || true
+elif [ -s "$HOME/.local/bin/mise" ]; then
+  eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null)" || true
+fi
+
+# 5. Homebrew (macOS) - ruby and gems may be here
+if [ -d "/opt/homebrew/bin" ]; then
+  export PATH="/opt/homebrew/bin:$PATH"
+elif [ -d "/usr/local/bin" ]; then
+  export PATH="/usr/local/bin:$PATH"
+fi
+
+# 6. Common Linux gem binary paths
+if [ -d "$HOME/.local/share/gem/ruby" ]; then
+  for dir in "$HOME/.local/share/gem/ruby"/*/bin; do
+    [ -d "$dir" ] && export PATH="$dir:$PATH"
+  done
+fi
+if [ -d "$HOME/.gem/ruby" ]; then
+  for dir in "$HOME/.gem/ruby"/*/bin; do
+    [ -d "$dir" ] && export PATH="$dir:$PATH"
+  done
+fi
+
+# --- Verify Ruby is available ---
+
+if ! command -v ruby >/dev/null 2>&1; then
+  echo "Error: ruby not found in PATH after environment setup" >&2
+  echo "PATH: $PATH" >&2
+  echo "Please install Ruby (https://www.ruby-lang.org/en/downloads/)" >&2
+  exit 1
+fi
+
+if ! command -v bundle >/dev/null 2>&1; then
+  echo "Error: bundler not found in PATH after environment setup" >&2
+  echo "Ruby found at: $(command -v ruby)" >&2
+  echo "Try: gem install bundler" >&2
+  exit 1
+fi
+
+# --- Ensure BUNDLE_GEMFILE is set ---
+
+export BUNDLE_GEMFILE="${BUNDLE_GEMFILE:-$GEM_ROOT/Gemfile}"
+
+# --- Launch the server ---
+
+exec bundle exec ruby "$SERVER_SCRIPT" "$@"

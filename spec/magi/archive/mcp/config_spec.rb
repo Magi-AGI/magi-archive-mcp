@@ -46,17 +46,15 @@ RSpec.describe Magi::Archive::Mcp::Config do
       end
     end
 
-    context "with invalid role" do
+    context "with any Decko role" do
       before do
         ENV["MCP_API_KEY"] = "test-key"
-        ENV["MCP_ROLE"] = "invalid-role"
+        ENV["MCP_ROLE"] = "magi team"
       end
 
-      it "raises ConfigurationError" do
-        expect { described_class.new }.to raise_error(
-          Magi::Archive::Mcp::Config::ConfigurationError,
-          /MCP_ROLE must be one of/
-        )
+      it "accepts the role without validation" do
+        config = described_class.new
+        expect(config.role).to eq("magi team")
       end
     end
 

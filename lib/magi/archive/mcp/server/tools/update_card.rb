@@ -46,9 +46,12 @@ module Magi
 
                 card = tools.update_card(name, **params)
 
+                # Build hybrid JSON response
+                response = build_response(card)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_updated_card(card)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -78,6 +81,23 @@ module Magi
               end
 
               private
+
+              def build_response(card)
+                card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+
+                {
+                  status: "success",
+                  id: card['name'],
+                  title: card['name'],
+                  source: card_url,
+                  url: card_url,
+                  text: format_updated_card(card),
+                  metadata: {
+                    type: card['type'],
+                    card_id: card['id']
+                  }.compact
+                }
+              end
 
               def format_updated_card(card)
                 parts = []

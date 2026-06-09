@@ -84,13 +84,57 @@ mcp_server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::SpoilerScan,
 
     # Auto-linking
-    Magi::Archive::Mcp::Server::Tools::AutoLink
+    Magi::Archive::Mcp::Server::Tools::AutoLink,
+
+    # File upload tools
+    Magi::Archive::Mcp::Server::Tools::UploadFile,
+    Magi::Archive::Mcp::Server::Tools::UploadFromUrl,
+    Magi::Archive::Mcp::Server::Tools::GetFileUrl,
+
+    # Content editing tools
+    Magi::Archive::Mcp::Server::Tools::AppendContent,
+    Magi::Archive::Mcp::Server::Tools::PrependContent,
+    Magi::Archive::Mcp::Server::Tools::FindAndReplace,
+    Magi::Archive::Mcp::Server::Tools::FindInCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardOutline,
+    Magi::Archive::Mcp::Server::Tools::UpdateSection,
+    Magi::Archive::Mcp::Server::Tools::DiffCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardStats,
+    Magi::Archive::Mcp::Server::Tools::TemplateCard,
+    Magi::Archive::Mcp::Server::Tools::SubmitFeedback
   ],
   server_context: server_context
 )
 
 # Set MCP server instance on the app class
 Magi::Archive::Mcp::RackApp.mcp_server_instance = mcp_server
+
+# Initialize OAuth components
+begin
+  require_relative '../lib/magi/archive/mcp/oauth/token_issuer'
+  require_relative '../lib/magi/archive/mcp/oauth/credential_store'
+  require_relative '../lib/magi/archive/mcp/oauth/client_cards'
+  require_relative '../lib/magi/archive/mcp/oauth/rate_limiter'
+  require_relative '../lib/magi/archive/mcp/oauth/pkce_verifier'
+  require_relative '../lib/magi/archive/mcp/oauth/login_page'
+
+  token_issuer = Magi::Archive::Mcp::OAuth::TokenIssuer.new
+  credential_store = Magi::Archive::Mcp::OAuth::CredentialStore.new
+  client_cards = Magi::Archive::Mcp::OAuth::ClientCards.new(
+    tools: magi_tools,
+    encryption_key: token_issuer.encryption_key
+  )
+  rate_limiter = Magi::Archive::Mcp::OAuth::RateLimiter.new
+
+  Magi::Archive::Mcp::RackApp.token_issuer = token_issuer
+  Magi::Archive::Mcp::RackApp.credential_store = credential_store
+  Magi::Archive::Mcp::RackApp.client_cards = client_cards
+  Magi::Archive::Mcp::RackApp.rate_limiter = rate_limiter
+
+  puts "OAuth 2.1 enabled (require_auth=#{ENV.fetch('OAUTH_REQUIRE_AUTH', 'false')})"
+rescue StandardError => e
+  puts "OAuth initialization skipped: #{e.message}"
+end
 
 # Create Rack app instance with security middleware
 app = Magi::Archive::Mcp::RackApp.new

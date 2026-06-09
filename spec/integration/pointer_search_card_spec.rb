@@ -3,6 +3,9 @@
 require "spec_helper"
 require_relative "../support/integration_helpers"
 
+# Load MCP server tools
+Dir[File.join(__dir__, '../../lib/magi/archive/mcp/server/tools/**/*.rb')].sort.each { |f| require f }
+
 RSpec.describe "Pointer and Search Card Handling", :integration do
   # Integration tests for get_card tool with Pointer and Search card types
   # Tests the helpful notes added to guide AI agents
@@ -33,8 +36,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      # Extract the text from the response
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # Verify the helpful note is present
       expect(text).to include("**Type:** Pointer")
@@ -56,7 +60,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # Should have the note but NOT have children section
       expect(text).to include("Use list_children to see referenced cards")
@@ -76,7 +82,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # Should have both the note AND children if the card has any
       expect(text).to include("**Note:** This is a Pointer card")
@@ -104,7 +112,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # Verify the helpful note is present
       expect(text).to include("**Type:** Search")
@@ -125,7 +135,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # The note should clarify that content is a query
       expect(text).to include("Content shows the search query")
@@ -148,7 +160,9 @@ RSpec.describe "Pointer and Search Card Handling", :integration do
         server_context: { magi_tools: tools }
       )
 
-      text = response.content.first[:text]
+      # Parse JSON response and extract text field
+      json_response = JSON.parse(response.content.first[:text])
+      text = json_response["text"]
 
       # Should NOT have Pointer or Search notes
       expect(text).not_to include("**Note:** This is a Pointer card")

@@ -11,6 +11,7 @@ require "fileutils"
 class ClaudeCliInstaller
   def initialize
     @server_path = File.expand_path("../mcp-server", __FILE__)
+    @launcher_path = File.expand_path("../mcp-server-launcher", __FILE__)
     @gem_root = File.expand_path("../..", @server_path)
   end
 
@@ -24,11 +25,12 @@ class ClaudeCliInstaller
       exit 1
     end
 
+    # Make server and launcher executable
+    FileUtils.chmod(0755, @server_path)
+    FileUtils.chmod(0755, @launcher_path) if File.exist?(@launcher_path)
+
     # Install Ruby dependencies
     install_dependencies
-
-    # Make server executable
-    FileUtils.chmod(0755, @server_path)
 
     # Check if claude command exists
     unless system("which claude > /dev/null 2>&1") || system("where claude > NUL 2>&1")
@@ -99,6 +101,16 @@ class ClaudeCliInstaller
     env_flags << "BUNDLE_GEMFILE=#{File.join(@gem_root, 'Gemfile')}"
 
     # Build full command with user (global) scope
+    # Use launcher script on Unix to handle rbenv/rvm/asdf PATH issues
+    # when MCP clients spawn the server as a subprocess without a login shell
+    server_cmd = if windows?
+                   ["bundle", "exec", "ruby", @server_path]
+                 elsif File.exist?(@launcher_path)
+                   [@launcher_path]
+                 else
+                   ["bundle", "exec", "ruby", @server_path]
+                 end
+
     cmd = [
       "claude", "mcp", "add",
       "--scope", "user",
@@ -106,8 +118,7 @@ class ClaudeCliInstaller
       "magi-archive",
       *env_flags,
       "--",
-      "bundle", "exec", "ruby",
-      @server_path,
+      *server_cmd,
       working_dir
     ]
 
@@ -178,6 +189,7 @@ class ClaudeCliInstaller
     puts ""
   end
 
+
   def get_username_password
     print "Decko email address: "
     username = gets.chomp
@@ -206,6 +218,10 @@ class ClaudeCliInstaller
       "MCP_API_KEY" => api_key,
       "MCP_ROLE" => role
     }
+  end
+
+  def windows?
+    RbConfig::CONFIG["host_os"] =~ /mswin|msys|mingw|cygwin|bccwin|wince|emc/i
   end
 end
 

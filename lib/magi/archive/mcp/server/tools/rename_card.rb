@@ -10,7 +10,7 @@ module Magi
         module Tools
           # MCP Tool for renaming cards (admin only)
           class RenameCard < ::MCP::Tool
-            description "Rename a card in the Magi Archive wiki (requires admin role)"
+            description "Rename a card in the Magi Archive wiki (requires admin role). Best practice: after renaming, check if the parent card or a sibling card has a table of contents (TOC) and update the old name to the new name. TOCs are typically on the parent card itself or a sibling like Parent+table-of-contents."
 
             annotations(
               read_only_hint: true,
@@ -42,9 +42,12 @@ module Magi
 
                 result = tools.rename_card(name, new_name, update_referers: update_referers)
 
+                # Build hybrid JSON response
+                response = build_response(result)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_rename(result)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError => e
                 ::MCP::Tool::Response.new([{
@@ -74,6 +77,24 @@ module Magi
               end
 
               private
+
+              def build_response(result)
+                new_url = "https://wiki.magi-agi.org/#{result['new_name'].to_s.gsub(' ', '_')}"
+
+                {
+                  status: "success",
+                  id: result['new_name'],
+                  title: "Card Renamed",
+                  source: new_url,
+                  url: new_url,
+                  text: format_rename(result),
+                  metadata: {
+                    old_name: result['old_name'],
+                    new_name: result['new_name'],
+                    updated_referers: result['updated_referers']
+                  }
+                }
+              end
 
               def format_rename(result)
                 parts = []

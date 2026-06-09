@@ -23,8 +23,7 @@ module Magi
                   description: "Get detailed health information (default: true for full check, false for quick ping)",
                   default: true
                 }
-              },
-              required: []
+              }
             )
 
             class << self
@@ -37,9 +36,12 @@ module Magi
                   health_info = tools.client.ping
                 end
 
+                # Build hybrid JSON response
+                response = build_response(health_info, detailed)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_health_info(health_info, detailed)
+                  text: JSON.generate(response)
                 }])
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
@@ -49,6 +51,24 @@ module Magi
               end
 
               private
+
+              def build_response(info, detailed)
+                status = info["status"]
+                is_healthy = status == "healthy" || status == "ok"
+
+                {
+                  id: "health_check",
+                  title: "Wiki Health Status",
+                  status: is_healthy ? "healthy" : status,
+                  text: format_health_info(info, detailed),
+                  metadata: {
+                    timestamp: info["timestamp"],
+                    version: info["version"],
+                    checks: info["checks"],
+                    detailed: detailed
+                  }.compact
+                }
+              end
 
               def format_health_info(info, detailed)
                 parts = []

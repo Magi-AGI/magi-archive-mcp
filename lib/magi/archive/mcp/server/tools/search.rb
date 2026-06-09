@@ -40,11 +40,18 @@ module Magi
                 )
 
                 # Transform to ChatGPT connector format
+                # ChatGPT is fussy about response shape:
+                # - id and title are REQUIRED
+                # - source is preferred over url (use both for compatibility)
+                # - snippet provides context for search results
                 results = search_result['cards'].map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}"
                   {
                     id: card['name'],
                     title: card['name'],
-                    url: "https://wiki.magi-agi.org/#{card['name'].gsub(' ', '_')}"
+                    snippet: "#{card['type']} card#{card['updated_at'] ? " - Updated: #{card['updated_at']}" : ''}",
+                    source: card_url,
+                    url: card_url
                   }
                 end
 

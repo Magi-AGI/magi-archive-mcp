@@ -31,9 +31,9 @@ module Magi
                 },
                 search_in: {
                   type: "string",
-                  description: "Where to search: 'both' (default, recommended - searches card names only), 'content' (slower - searches card content only), or 'both' (comprehensive - searches both names and content)",
+                  description: "Where to search: 'name' (default, fastest - searches card names only), 'content' (slower - searches card content only), or 'both' (comprehensive - searches both names and content)",
                   enum: ["name", "content", "both"],
-                  default: "both"
+                  default: "name"
                 },
                 limit: {
                   type: "integer",
@@ -53,8 +53,7 @@ module Magi
                   description: "Include virtual cards (empty junction cards with no content) in results. Default: false (filters them out).",
                   default: false
                 }
-              },
-              required: []
+              }
             )
 
             class << self
@@ -76,9 +75,12 @@ module Magi
                 returned = (results["cards"] || []).size
                 $stderr.puts "search_cards results: returned #{returned} of #{total} total"
 
+                # Build hybrid JSON response
+                response = build_response(results)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_results(results)
+                  text: JSON.generate(response)
                 }])
               rescue Client::AuthorizationError => e
                 ::MCP::Tool::Response.new([{
@@ -98,6 +100,33 @@ module Magi
               end
 
               private
+
+              def build_response(results)
+                cards = results["cards"] || []
+                total = results["total"] || 0
+                offset = results["offset"] || 0
+                next_offset = results["next_offset"]
+
+                # Transform to ChatGPT-compatible results array
+                result_items = cards.map do |card|
+                  card_url = "https://wiki.magi-agi.org/#{card['name'].to_s.gsub(' ', '_')}"
+                  {
+                    id: card['name'],
+                    title: card['name'],
+                    snippet: "#{card['type']} card#{card['updated_at'] ? " - Updated: #{card['updated_at']}" : ''}",
+                    source: card_url,
+                    url: card_url
+                  }
+                end
+
+                {
+                  results: result_items,
+                  total: total,
+                  offset: offset,
+                  next_offset: next_offset,
+                  text: format_results(results)
+                }.compact
+              end
 
               def format_results(results)
                 cards = results["cards"] || []

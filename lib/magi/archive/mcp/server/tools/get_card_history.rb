@@ -65,9 +65,12 @@ module Magi
 
                 history = tools.get_card_history(name, limit: limit)
 
+                # Build hybrid JSON response
+                response = build_response(name, history)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_history(history)
+                  text: JSON.generate(response)
                 }])
               rescue Client::NotFoundError
                 ::MCP::Tool::Response.new([{
@@ -98,6 +101,34 @@ module Magi
               end
 
               private
+
+              def build_response(name, history)
+                revisions = history["revisions"] || []
+                card_url = "https://wiki.magi-agi.org/#{name.to_s.gsub(' ', '_')}"
+
+                result_items = revisions.map do |rev|
+                  {
+                    id: rev['act_id'].to_s,
+                    title: "#{rev['action'].capitalize} by #{rev['actor'] || 'Unknown'}",
+                    snippet: "#{rev['acted_at']}#{rev['changes']&.any? ? " - Changed: #{rev['changes'].join(', ')}" : ''}",
+                    act_id: rev['act_id']
+                  }
+                end
+
+                {
+                  id: name,
+                  title: "Card History: #{name}",
+                  source: card_url,
+                  url: card_url,
+                  results: result_items,
+                  total: history['total'] || revisions.size,
+                  text: format_history(history),
+                  metadata: {
+                    card_name: history['card'],
+                    in_trash: history['in_trash']
+                  }.compact
+                }
+              end
 
               def format_history(history)
                 parts = []

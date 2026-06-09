@@ -1,6 +1,18 @@
 # frozen_string_literal: true
 
-require "dotenv/load"
+require "dotenv"
+
+# Load .env from the gem root, not the process CWD.
+# When MCP clients (Cursor, Claude Desktop, etc.) spawn the server,
+# the CWD is typically NOT the project directory, so dotenv/load
+# (which searches CWD) would silently fail to find the .env file.
+#
+# Use overload (not load) because when multiple MCP servers run in the
+# same process (e.g., magi-archive-mcp + hyperon-wiki-mcp in Claude Code),
+# the first server's .env would set DECKO_API_BASE_URL and Dotenv.load
+# would silently skip this server's .env values.
+_gem_root = File.expand_path("../../../../..", __FILE__)
+Dotenv.overload(File.join(_gem_root, ".env"))
 
 module Magi
   module Archive
@@ -21,7 +33,7 @@ module Magi
       #
       # Method 2: API Key
       # - MCP_API_KEY: API key for authentication with Decko
-      # - MCP_ROLE: Required role scope (user/gm/admin)
+      # - MCP_ROLE: Required role scope (as defined in Decko)
       #
       # Common optional variables:
       # - DECKO_API_BASE_URL: Base URL for Decko API (default: https://wiki.magi-agi.org/api/mcp)
@@ -40,9 +52,6 @@ module Magi
       class Config
         # Configuration error raised when required settings are missing
         class ConfigurationError < StandardError; end
-
-        # Valid role values
-        VALID_ROLES = %w[user gm admin].freeze
 
         # Valid authentication methods
         VALID_AUTH_METHODS = %i[username api_key].freeze
@@ -121,8 +130,10 @@ module Magi
 
         def load_configuration
           # Load credentials
+          # MCP_PASS is an alias for MCP_PASSWORD to work around clients
+          # that redact env vars matching *PASSWORD* patterns (e.g., Gemini CLI)
           @username = ENV.fetch("MCP_USERNAME", nil)
-          @password = ENV.fetch("MCP_PASSWORD", nil)
+          @password = ENV.fetch("MCP_PASSWORD", nil) || ENV.fetch("MCP_PASS", nil)
           @api_key = ENV.fetch("MCP_API_KEY", nil)
 
           # Load common settings
@@ -150,8 +161,12 @@ module Magi
         def validate_configuration
           # Validate auth method
           unless auth_method
+            env_file = File.join(File.expand_path("../../../../..", __FILE__), ".env")
+            env_hint = File.exist?(env_file) ? "Found .env at #{env_file} but it lacks credentials" : "No .env file at #{env_file}"
             raise ConfigurationError,
-                  "Must provide either (MCP_USERNAME + MCP_PASSWORD) or MCP_API_KEY"
+                  "Must provide either (MCP_USERNAME + MCP_PASSWORD) or MCP_API_KEY. " \
+                  "Set these in your MCP client's env config or in the project .env file. " \
+                  "(#{env_hint})"
           end
 
           # Validate credentials for chosen method
@@ -172,12 +187,6 @@ module Magi
             if role.nil? || role.empty?
               raise ConfigurationError, "MCP_ROLE is required when using API key authentication"
             end
-          end
-
-          # Validate role if provided
-          if role && !VALID_ROLES.include?(role)
-            raise ConfigurationError,
-                  "MCP_ROLE must be one of: #{VALID_ROLES.join(", ")} (got: #{role})"
           end
         end
       end

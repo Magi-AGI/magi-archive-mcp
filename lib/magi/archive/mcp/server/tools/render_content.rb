@@ -52,9 +52,12 @@ module Magi
 
                 result = tools.convert_content(content, from: from_sym, to: to_sym)
 
+                # Build hybrid JSON response
+                response = build_response(from_format, to_format, result, max_output_length)
+
                 ::MCP::Tool::Response.new([{
                   type: "text",
-                  text: format_result(from_format, to_format, result, max_output_length)
+                  text: JSON.generate(response)
                 }])
               rescue StandardError => e
                 ::MCP::Tool::Response.new([{
@@ -64,6 +67,27 @@ module Magi
               end
 
               private
+
+              def build_response(from_fmt, to_fmt, result, max_output_length)
+                converted = extract_converted_content(result).to_s.strip
+                total_length = converted.length
+                truncated = max_output_length > 0 && converted.length > max_output_length
+
+                output_content = truncated ? converted[0...max_output_length] : converted
+
+                {
+                  id: "content_conversion",
+                  title: "Content Conversion: #{from_fmt.upcase} to #{to_fmt.upcase}",
+                  converted_content: output_content,
+                  text: format_result(from_fmt, to_fmt, result, max_output_length),
+                  metadata: {
+                    from_format: from_fmt,
+                    to_format: to_fmt,
+                    total_length: total_length,
+                    truncated: truncated
+                  }
+                }
+              end
 
               def format_result(from_fmt, to_fmt, result, max_output_length)
                 # Extract the converted content from the API response hash

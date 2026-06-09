@@ -1,7 +1,53 @@
 # ChatGPT Usage Guide for Magi Archive MCP
 
-**Date**: 2025-12-11
-**Purpose**: Correct usage patterns for AI agents using the Magi Archive MCP server
+**Date**: 2025-12-11 (updated 2026-02-11)
+**Purpose**: Setup instructions and correct usage patterns for AI agents using the Magi Archive MCP server
+
+---
+
+## Quick Setup: ChatGPT, Claude.ai, and Other Web Platforms
+
+### ChatGPT
+
+1. Go to **Settings** > **Connected Apps** (or the MCP server configuration area)
+2. Click **Add MCP Server** (or "Create new app")
+3. Enter the server URL: `https://mcp.magi-agi.org`
+4. Set authentication to **OAuth**
+5. Leave the credential fields **blank** (client ID, client secret, etc.)
+6. Click **Save** / **Connect**
+7. ChatGPT will redirect you to the **Magi Archive login page**
+8. Sign in with your **Decko wiki email and password** (the same credentials you use at `wiki.magi-agi.org`)
+9. After signing in, you'll be redirected back and the MCP tools will appear
+
+### Claude.ai
+
+1. Go to your MCP server settings
+2. Add server URL: `https://mcp.magi-agi.org`
+3. Select **OAuth** for authentication, leave credential fields blank
+4. Complete the login flow when redirected to the Magi Archive login page
+
+### How It Works
+
+The server uses **OAuth 2.1 Authorization Code + PKCE** (the standard required by the MCP spec). When you add the server:
+
+- The platform automatically discovers OAuth endpoints via `/.well-known/oauth-authorization-server`
+- It registers itself as a client (Dynamic Client Registration)
+- It redirects your browser to `/authorize` where you see the Magi Archive login page
+- You authenticate with your Decko credentials -- no API keys or secrets needed
+- The platform receives a short-lived access token and handles refresh automatically
+
+Your role (user/gm/admin) is determined by your Decko account permissions.
+
+### CLI Tools (Claude Code, Codex, Gemini CLI)
+
+For CLI-based agents, use the stdio transport with environment variables instead:
+
+```bash
+MCP_USERNAME=your-decko-email
+MCP_PASSWORD=your-decko-password
+```
+
+See the [Authentication and Roles](#authentication-and-roles) section below for details.
 
 ---
 

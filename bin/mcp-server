@@ -8,6 +8,23 @@
 
 require "bundler/setup"
 require "mcp"
+require "tmpdir"
+
+# Debug logging to file (temporary - helps diagnose connection issues)
+DEBUG_LOG = ENV["MCP_DEBUG_LOG"] || File.join(Dir.tmpdir, "magi-mcp-debug.log")
+$mcp_debug = File.open(DEBUG_LOG, "a")
+$mcp_debug.sync = true
+$mcp_debug.puts "\n#{'=' * 60}"
+$mcp_debug.puts "MCP Server starting at #{Time.now}"
+$mcp_debug.puts "PID: #{Process.pid}"
+$mcp_debug.puts "Ruby: #{RUBY_VERSION} (#{RUBY_PLATFORM})"
+$mcp_debug.puts "ARGV: #{ARGV.inspect}"
+$mcp_debug.puts "PWD: #{Dir.pwd}"
+$mcp_debug.puts "ENV keys: #{ENV.keys.select { |k| k.start_with?('MCP_', 'DECKO_', 'BUNDLE_') }.sort.join(', ')}"
+$mcp_debug.puts "MCP_USERNAME present: #{!ENV['MCP_USERNAME'].to_s.empty?}"
+$mcp_debug.puts "MCP_PASSWORD present: #{!ENV['MCP_PASSWORD'].to_s.empty?}"
+$mcp_debug.puts "DECKO_API_BASE_URL: #{ENV['DECKO_API_BASE_URL']}"
+$mcp_debug.puts "BUNDLE_GEMFILE: #{ENV['BUNDLE_GEMFILE']}"
 
 # Configure JSON Schema validator before loading tools
 require_relative "../lib/magi/archive/mcp/schema_config"
@@ -60,13 +77,35 @@ require_relative "../lib/magi/archive/mcp/server/tools/spoiler_scan"
 # Auto-linking
 require_relative "../lib/magi/archive/mcp/server/tools/auto_link"
 
+# File upload tools
+require_relative "../lib/magi/archive/mcp/server/tools/upload_file"
+require_relative "../lib/magi/archive/mcp/server/tools/upload_from_url"
+require_relative "../lib/magi/archive/mcp/server/tools/get_file_url"
+
+# Content editing tools
+require_relative "../lib/magi/archive/mcp/server/tools/append_content"
+require_relative "../lib/magi/archive/mcp/server/tools/prepend_content"
+require_relative "../lib/magi/archive/mcp/server/tools/find_and_replace"
+require_relative "../lib/magi/archive/mcp/server/tools/find_in_card"
+require_relative "../lib/magi/archive/mcp/server/tools/get_card_outline"
+require_relative "../lib/magi/archive/mcp/server/tools/update_section"
+require_relative "../lib/magi/archive/mcp/server/tools/diff_card"
+require_relative "../lib/magi/archive/mcp/server/tools/get_card_stats"
+require_relative "../lib/magi/archive/mcp/server/tools/template_card"
+require_relative "../lib/magi/archive/mcp/server/tools/submit_feedback"
+
 # Initialize the Magi Archive tools
 # This creates an authenticated client using environment variables:
 # - MCP_USERNAME + MCP_PASSWORD (recommended)
 # - OR MCP_API_KEY + MCP_ROLE
+$mcp_debug.puts "Initializing Tools..."
 magi_tools = begin
-  Magi::Archive::Mcp::Tools.new
+  tools = Magi::Archive::Mcp::Tools.new
+  $mcp_debug.puts "Tools initialized successfully"
+  tools
 rescue StandardError => e
+  $mcp_debug.puts "TOOLS INIT FAILED: #{e.class}: #{e.message}"
+  $mcp_debug.puts e.backtrace.first(5).join("\n")
   $stderr.puts "Error initializing Magi Archive tools: #{e.message}"
   $stderr.puts "Please ensure you have configured authentication in .env or environment variables:"
   $stderr.puts "  MCP_USERNAME=<your-username>"
@@ -86,10 +125,17 @@ server_context = {
   working_directory: working_directory
 }
 
+# Configure protocol version for client compatibility
+# Default to 2025-03-26 which supports annotations and is widely compatible
+# Override with MCP_PROTOCOL_VERSION env var if needed
+protocol_version = ENV.fetch("MCP_PROTOCOL_VERSION", "2025-03-26")
+mcp_configuration = ::MCP::Configuration.new(protocol_version: protocol_version)
+
 # Create the MCP server
 server = ::MCP::Server.new(
   name: "magi-archive",
   version: Magi::Archive::Mcp::VERSION,
+  configuration: mcp_configuration,
   tools: [
     # Core card operations
     Magi::Archive::Mcp::Server::Tools::GetCard,
@@ -134,7 +180,24 @@ server = ::MCP::Server.new(
     Magi::Archive::Mcp::Server::Tools::SpoilerScan,
 
     # Auto-linking
-    Magi::Archive::Mcp::Server::Tools::AutoLink
+    Magi::Archive::Mcp::Server::Tools::AutoLink,
+
+    # File upload tools
+    Magi::Archive::Mcp::Server::Tools::UploadFile,
+    Magi::Archive::Mcp::Server::Tools::UploadFromUrl,
+    Magi::Archive::Mcp::Server::Tools::GetFileUrl,
+
+    # Content editing tools
+    Magi::Archive::Mcp::Server::Tools::AppendContent,
+    Magi::Archive::Mcp::Server::Tools::PrependContent,
+    Magi::Archive::Mcp::Server::Tools::FindAndReplace,
+    Magi::Archive::Mcp::Server::Tools::FindInCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardOutline,
+    Magi::Archive::Mcp::Server::Tools::UpdateSection,
+    Magi::Archive::Mcp::Server::Tools::DiffCard,
+    Magi::Archive::Mcp::Server::Tools::GetCardStats,
+    Magi::Archive::Mcp::Server::Tools::TemplateCard,
+    Magi::Archive::Mcp::Server::Tools::SubmitFeedback
   ],
   server_context: server_context
 )
@@ -150,14 +213,21 @@ $stderr.puts "Magi Archive MCP Server v#{Magi::Archive::Mcp::VERSION}"
 $stderr.puts "Working directory: #{working_directory}"
 $stderr.puts "Authenticated as: #{magi_tools.client.config.username || 'API Key'}"
 $stderr.puts "Ready for MCP requests via stdio..."
+$mcp_debug.puts "Server created, protocol_version=#{protocol_version}"
+$mcp_debug.puts "Transport open, waiting for input on stdin..."
+$mcp_debug.puts "Debug log: #{DEBUG_LOG}"
 
 # Start the server
 begin
   transport.open
+  $mcp_debug.puts "Transport closed normally (stdin EOF)"
 rescue Interrupt
+  $mcp_debug.puts "Interrupted (Ctrl+C)"
   $stderr.puts "\nShutting down gracefully..."
   exit 0
 rescue StandardError => e
+  $mcp_debug.puts "FATAL: #{e.class}: #{e.message}"
+  $mcp_debug.puts e.backtrace.first(10).join("\n")
   $stderr.puts "Fatal error: #{e.message}"
   $stderr.puts e.backtrace.join("\n")
   exit 1

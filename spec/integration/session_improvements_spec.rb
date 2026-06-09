@@ -44,7 +44,9 @@ RSpec.describe "Session Improvements", :integration do
             server_context: { magi_tools: tools }
           )
 
-          text = response.content.first[:text]
+          # Parse JSON response and extract text field
+          json_response = JSON.parse(response.content.first[:text])
+          text = json_response["text"]
 
           # Verify virtual card warning is present
           expect(text).to include("**Warning:** This is a virtual/junction card")
@@ -86,7 +88,9 @@ RSpec.describe "Session Improvements", :integration do
             server_context: { magi_tools: tools }
           )
 
-          text = response.content.first[:text]
+          # Parse JSON response and extract text field
+          json_response = JSON.parse(response.content.first[:text])
+          text = json_response["text"]
 
           # Should explain about compound child cards
           expect(text).to include("full hierarchical path")
