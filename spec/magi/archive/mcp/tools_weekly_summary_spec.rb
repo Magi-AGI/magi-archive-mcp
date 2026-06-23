@@ -341,7 +341,10 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     before do
-      allow(tools).to receive(:get_recent_changes).and_return(card_changes)
+      allow(tools).to receive(:get_recent_changes).and_return(
+        { "cards" => card_changes, "total" => card_changes.size,
+          "fetched" => card_changes.size, "truncated" => false }
+      )
       allow(tools).to receive(:scan_git_repos).and_return(repo_changes)
 
       # Stub the GET request for the parent card (Home)
@@ -473,7 +476,8 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
     end
 
     it "supports custom lookback period" do
-      expect(tools).to receive(:get_recent_changes).with(days: 14, max_cards: 500)
+      expect(tools).to receive(:get_recent_changes).with(days: 14, max_cards: 500, return_total: true)
+        .and_return({ "cards" => [], "total" => 0, "fetched" => 0, "truncated" => false })
 
       # Stub TOC operations
       stub_request(:get, "#{base_url}/cards/Weekly%20Work%20Summaries+table-of-contents")
@@ -486,6 +490,21 @@ RSpec.describe Magi::Archive::Mcp::Tools, "weekly summary" do
         .to_return(status: 201, body: { name: "Summary", id: 999, type: "Markdown" }.to_json)
 
       tools.create_weekly_summary(days: 14, create_card: true)
+    end
+
+    it "reports the true total and a truncation note when the card list is capped" do
+      allow(tools).to receive(:get_recent_changes).and_return(
+        { "cards" => card_changes, "total" => 642, "fetched" => card_changes.size, "truncated" => true }
+      )
+
+      result = tools.create_weekly_summary(create_card: false)
+
+      expect(result["card_updates_total"]).to eq(642)
+      expect(result["card_updates_truncated"]).to be(true)
+      # executive summary reports the TRUE total, not the fetched size
+      expect(result["content"]).to include("642 card updates")
+      # and the list section flags the truncation explicitly
+      expect(result["content"]).to include("Showing the #{card_changes.size} most recent of 642")
     end
   end
 
