@@ -29,6 +29,9 @@ module Magi
                   enum: %w[icon small medium large original]
                 }
               },
+              required: ["name"]
+            )
+
             output_schema(
               properties: {
                 id: { type: "string" },
