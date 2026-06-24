@@ -24,6 +24,8 @@ module Magi
                   default: true
                 }
               }
+            )
+
             output_schema(
               properties: {
                 id: { type: "string" },

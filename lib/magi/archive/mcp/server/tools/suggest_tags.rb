@@ -38,6 +38,8 @@ module Magi
                   maximum: 20
                 }
               }
+            )
+
             output_schema(
               properties: {
                 id: { type: "string" },
